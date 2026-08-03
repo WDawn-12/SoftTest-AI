@@ -164,6 +164,15 @@ cd frontend
 pnpm build   # 产物输出到 dist/
 ```
 
+### 7.4 一键启停（可选）
+
+项目根目录提供两个脚本，适合本地开发时快速开关前后端服务：
+
+```bash
+.\start-dev.ps1   # 一键启动后端(8000) + 前端(5173)
+.\stop-dev.ps1    # 一键停止
+```
+
 ## 8. 数据库设计
 
 共 7 张表，完整 DDL 见 [docs/sql/init.sql](docs/sql/init.sql)：
