@@ -62,6 +62,8 @@ class DemoProvider(LLMProvider):
                 {"test_cases": self._generate_testcases(test_points)},
                 ensure_ascii=False,
             )
+        if "对话内容：" in user_prompt:
+            return self._chat_demo(user_prompt)
         return self._requirement_demo(user_prompt)
 
     def _extract_functions(self, user_prompt: str) -> list[dict] | None:
@@ -237,6 +239,28 @@ class DemoProvider(LLMProvider):
                 }
             )
         return cases
+
+    def _chat_demo(self, user_prompt: str) -> str:
+        """聊天任务的演示输出（Markdown）。"""
+        marker = "对话内容："
+        idx = user_prompt.find(marker)
+        question = user_prompt[idx + len(marker) :].strip() or "（空问题）"
+        has_knowledge = "项目知识库：" in user_prompt and "（暂无内容）" not in user_prompt
+        lines = [
+            "### 演示模式回复",
+            "",
+            f"**您的问题**：{question}",
+            "",
+            "当前为**演示模式**（未配置 OpenAI / DeepSeek API Key），以下为基于项目知识库的示例回答。",
+            "",
+        ]
+        if has_knowledge:
+            lines.append(
+                "> 项目知识库已包含需求文档与测试用例，配置 API Key 后可获得真实的智能问答。"
+            )
+        else:
+            lines.append("> 当前项目知识库暂无内容，请先上传需求文档并生成测试点/测试用例。")
+        return "\n".join(lines)
 
 
 def get_llm_provider() -> LLMProvider:

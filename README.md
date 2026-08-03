@@ -57,7 +57,7 @@ graph LR
 | AI 解析结果 | Requirement Agent 解析：模块、功能点、角色、流程、风险 | ✅ 已完成 |
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
-| AI 聊天助手 | 与 AI Agent 对话 | 第九阶段 |
+| AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
 | 系统设置 | AI 接口配置（OpenAI / DeepSeek）等 | 第十阶段 |
 
 ## 5. 项目目录结构
@@ -235,6 +235,9 @@ pnpm build   # 产物输出到 dist/
 | PATCH | /api/v1/projects/{project_id}/test-cases/{id} | 编辑测试用例（人工） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/test-cases/{id} | 删除测试用例 | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/test-cases/export | 批量导出测试用例 Excel | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/chat/messages | 发送消息（AI 对话） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/chat/history | 聊天历史（分页） | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/chat/history | 清空聊天记录 | 创建人/管理员 |
 
 ## 10. Excel 导出格式
 
@@ -261,6 +264,8 @@ pnpm build   # 产物输出到 dist/
 
 **TestCase Agent（已完成）**：根据测试点生成完整测试用例（功能、测试点、测试数据、优先级、前置条件、步骤、预期结果），保存至 `test_cases` 表；编号按项目顺序自动生成（TC0001、TC0002……），支持重新生成与人工编辑删除，并支持按筛选条件批量导出 Excel。
 
+**AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
+
 ## 11. 开发路线图
 
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
@@ -271,7 +276,7 @@ pnpm build   # 产物输出到 dist/
 - [x] 第六阶段：测试点生成
 - [x] 第七阶段：测试用例生成
 - [x] 第八阶段：Excel 导出
-- [ ] 第九阶段：AI 聊天
+- [x] 第九阶段：AI 聊天
 - [ ] 第十阶段：系统优化
 - [ ] 第十一阶段：Docker 部署
 - [ ] 第十二阶段：答辩准备
