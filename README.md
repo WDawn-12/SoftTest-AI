@@ -51,8 +51,8 @@ graph LR
 | --- | --- | --- |
 | 登录 | 用户名密码登录，JWT 认证（含注册） | ✅ 已完成 |
 | Dashboard | 项目、测试点、测试用例统计概览 | 后续阶段 |
-| 项目管理 | 项目 CRUD | 第三阶段 |
-| 新建项目 | 创建项目表单 | 第三阶段 |
+| 项目管理 | 项目 CRUD（分页、搜索） | ✅ 已完成 |
+| 新建项目 | 创建项目表单 | ✅ 已完成 |
 | 上传需求文档 | 上传 Word / PDF，提取文本 | 第四阶段 |
 | AI 解析结果 | 展示功能模块提取结果 | 第五阶段 |
 | 测试点管理 | AI 生成测试点 + 人工编辑 | 第六阶段 |
@@ -214,6 +214,11 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/users/me | 当前用户信息 | 登录用户 |
 | GET | /api/v1/users | 用户列表 | 管理员 |
 | PATCH | /api/v1/users/{user_id}/status | 启用/禁用用户 | 管理员 |
+| POST | /api/v1/projects | 创建项目 | 登录用户 |
+| GET | /api/v1/projects | 项目列表（分页 + 搜索） | 登录用户 |
+| GET | /api/v1/projects/{project_id} | 项目详情 | 创建人/管理员 |
+| PATCH | /api/v1/projects/{project_id} | 更新项目 | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id} | 删除项目 | 创建人/管理员 |
 
 ## 10. Excel 导出格式
 
@@ -228,7 +233,7 @@ pnpm build   # 产物输出到 dist/
 
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
 - [x] 第二阶段：登录（JWT 认证、用户管理）
-- [ ] 第三阶段：项目管理
+- [x] 第三阶段：项目管理
 - [ ] 第四阶段：上传需求文档
 - [ ] 第五阶段：AI 解析需求
 - [ ] 第六阶段：测试点生成
