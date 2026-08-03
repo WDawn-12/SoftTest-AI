@@ -56,7 +56,7 @@ graph LR
 | 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
 | AI 解析结果 | Requirement Agent 解析：模块、功能点、角色、流程、风险 | ✅ 已完成 |
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
-| 测试用例管理 | AI 生成测试用例 + 人工编辑 | 第七阶段 |
+| 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
 | AI 聊天助手 | 与 AI Agent 对话 | 第九阶段 |
 | 系统设置 | AI 接口配置（OpenAI / DeepSeek）等 | 第十阶段 |
 
@@ -230,6 +230,10 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id}/test-points | 测试点列表（筛选 + 分页） | 创建人/管理员 |
 | PATCH | /api/v1/projects/{project_id}/test-points/{id} | 编辑测试点（人工） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/test-points/{id} | 删除测试点 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/{id}/test-cases/generate | 调用 TestCase Agent 生成测试用例 | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/test-cases | 测试用例列表（筛选 + 分页） | 创建人/管理员 |
+| PATCH | /api/v1/projects/{project_id}/test-cases/{id} | 编辑测试用例（人工） | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/test-cases/{id} | 删除测试用例 | 创建人/管理员 |
 
 ## 10. Excel 导出格式
 
@@ -254,7 +258,7 @@ pnpm build   # 产物输出到 dist/
 
 **TestPoint Agent（已完成）**：根据功能模块与功能点，为每个功能点生成五类测试点（正常流程、异常流程、边界值、安全、兼容性），保存至 `test_points` 表，支持重新生成与人工编辑。
 
-TestCase Agent 将在后续阶段实现。
+**TestCase Agent（已完成）**：根据测试点生成完整测试用例（功能、测试点、优先级、前置条件、步骤含测试数据、预期结果），保存至 `test_cases` 表；编号按项目顺序自动生成（TC0001、TC0002……），支持重新生成与人工编辑删除。
 
 ## 11. 开发路线图
 
@@ -264,7 +268,7 @@ TestCase Agent 将在后续阶段实现。
 - [x] 第四阶段：上传需求文档
 - [x] 第五阶段：AI 解析需求
 - [x] 第六阶段：测试点生成
-- [ ] 第七阶段：测试用例生成
+- [x] 第七阶段：测试用例生成
 - [ ] 第八阶段：Excel 导出
 - [ ] 第九阶段：AI 聊天
 - [ ] 第十阶段：系统优化

@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS `modules` (
 CREATE TABLE IF NOT EXISTS `test_cases` (
   `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '用例ID',
   `project_id`      BIGINT       NOT NULL COMMENT '所属项目ID',
+  `requirement_id`  BIGINT       DEFAULT NULL COMMENT '来源需求ID',
   `module_id`       BIGINT       DEFAULT NULL COMMENT '所属模块ID',
   `case_no`         VARCHAR(50)  NOT NULL COMMENT '用例编号',
   `title`           VARCHAR(200) NOT NULL COMMENT '功能名称',
@@ -107,9 +108,11 @@ CREATE TABLE IF NOT EXISTS `test_cases` (
   `updated_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_test_cases_project_id` (`project_id`),
+  KEY `idx_test_cases_requirement_id` (`requirement_id`),
   KEY `idx_test_cases_module_id` (`module_id`),
   KEY `idx_test_cases_created_by` (`created_by`),
   CONSTRAINT `fk_test_cases_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_test_cases_requirement` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_test_cases_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_test_cases_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例表';

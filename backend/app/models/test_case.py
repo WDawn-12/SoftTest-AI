@@ -20,6 +20,12 @@ class TestCase(Base, TimestampMixin):
         nullable=False,
         comment="所属项目ID",
     )
+    requirement_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("requirements.id", ondelete="CASCADE"),
+        index=True,
+        comment="来源需求ID",
+    )
     module_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("modules.id", ondelete="SET NULL"),

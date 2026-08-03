@@ -17,7 +17,9 @@ from app.schemas.requirement import (
     RequirementOut,
 )
 from app.schemas.testpoint import TestPointOut
+from app.schemas.testcase import TestCaseOut
 from app.services.requirement_service import run_requirement_parse
+from app.services.testcase_service import build_testcase_out, run_testcase_generation
 from app.services.testpoint_service import build_testpoint_out, run_testpoint_generation
 from app.services.document_parser import extract_text
 
@@ -229,3 +231,23 @@ def generate_test_points(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return build_testpoint_out(db, created)
+
+
+@router.post(
+    "/{requirement_id}/test-cases/generate",
+    response_model=list[TestCaseOut],
+    summary="生成测试用例（TestCase Agent）",
+)
+def generate_test_cases(
+    project_id: int,
+    requirement_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> list[TestCaseOut]:
+    """调用 TestCase Agent 根据测试点生成测试用例（含编号，可重新生成）。"""
+    requirement = _get_requirement(db, project_id, requirement_id, current_user)
+    try:
+        created = run_testcase_generation(db, requirement, current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return build_testcase_out(db, created)

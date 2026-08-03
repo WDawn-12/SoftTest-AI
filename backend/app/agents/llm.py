@@ -49,11 +49,17 @@ class DemoProvider(LLMProvider):
     name = "demo"
 
     def chat(self, system_prompt: str, user_prompt: str) -> str:
-        # 演示供应商：优先按「测试点生成」任务生成示例，否则返回需求解析示例
+        # 演示供应商：按任务类型返回对应示例（测试点 / 测试用例 / 需求解析）
         functions = self._extract_functions(user_prompt)
         if functions is not None:
             return json.dumps(
                 {"test_points": self._generate_testpoints(functions)},
+                ensure_ascii=False,
+            )
+        test_points = self._extract_testpoints(user_prompt)
+        if test_points is not None:
+            return json.dumps(
+                {"test_cases": self._generate_testcases(test_points)},
                 ensure_ascii=False,
             )
         return self._requirement_demo(user_prompt)
@@ -68,6 +74,24 @@ class DemoProvider(LLMProvider):
         except json.JSONDecodeError:
             return None
         if isinstance(data, list) and data and "functions" in data[0]:
+            return data
+        return None
+
+    def _extract_testpoints(self, user_prompt: str) -> list[dict] | None:
+        """从用户提示中提取测试点 JSON（TestCase Agent 专用）。"""
+        fence = re.search(r"```json\s*(.*?)```", user_prompt, re.S)
+        if not fence:
+            return None
+        try:
+            data = json.loads(fence.group(1))
+        except json.JSONDecodeError:
+            return None
+        if (
+            isinstance(data, list)
+            and data
+            and "name" in data[0]
+            and "category" in data[0]
+        ):
             return data
         return None
 
@@ -170,6 +194,43 @@ class DemoProvider(LLMProvider):
             },
             ensure_ascii=False,
         )
+
+    def _generate_testcases(self, test_points: list[dict]) -> list[dict]:
+        """按五类测试点生成演示测试用例。"""
+        cases: list[dict] = []
+        for point in test_points:
+            name = str(point.get("name", "功能测试"))
+            category = str(point.get("category", "normal"))
+            module = str(point.get("module", "核心模块"))
+            # 从「xxx」中提取功能名作为 title
+            match = re.search(r"「([^」]+)」", name)
+            title = match.group(1) if match else module
+            priority = "高" if category == "security" else "中"
+            expected = {
+                "normal": "操作成功，结果符合预期",
+                "exception": "系统给出明确错误提示，流程不中断",
+                "boundary": "边界值处理正确，无越界或异常",
+                "security": "未授权/恶意操作被拒绝，数据安全",
+                "compatibility": "各浏览器/分辨率下表现一致",
+            }.get(category, "操作成功")
+            cases.append(
+                {
+                    "module": module,
+                    "title": title,
+                    "test_point": name,
+                    "priority": priority,
+                    "preconditions": "系统运行正常，当前用户具备相应操作权限",
+                    "steps": [
+                        f"进入「{title}」对应功能页面",
+                        f"按测试点输入测试数据（{category} 场景）",
+                        "执行操作",
+                        "观察并记录系统反馈",
+                    ],
+                    "expected_result": expected,
+                    "remark": "由 TestCase Agent 生成，可人工编辑",
+                }
+            )
+        return cases
 
 
 def get_llm_provider() -> LLMProvider:
