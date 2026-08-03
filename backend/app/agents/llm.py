@@ -239,28 +239,52 @@ class DemoProvider(LLMProvider):
     def _pick_test_data(self, test_data: object, point_name: str) -> str:
         """从生成器输出的样本中按测试点场景选取测试数据。"""
         if not isinstance(test_data, list) or not test_data:
-            return "（测试数据生成器未识别到字段）"
+            # 兜底：使用字符串类型样本（正常服务流程不会触发）
+            from app.services.test_data_generator import build_test_data_for_point
+
+            test_data = build_test_data_for_point(point_name)
+        if not test_data:
+            return ""
         lines = []
         for item in test_data:
             samples = item.get("samples") if isinstance(item, dict) else {}
             if not isinstance(samples, dict):
                 continue
             lower_name = point_name.lower()
-            if "为空" in point_name or "空值" in point_name or "为空" in lower_name:
-                value = samples.get("空值") or samples.get("正常", "")
-            elif "超长" in point_name or "边界" in point_name or "最大" in point_name:
-                value = samples.get("超长") or samples.get("最大值") or samples.get("正常", "")
-            elif "最小" in point_name:
-                value = samples.get("最小值") or samples.get("正常", "")
+
+            def pick(case_key: str) -> str:
+                """按类别键取值；缺失时回退正常值（空字符串是合法取值，不能回退）。"""
+                if case_key in samples:
+                    return samples[case_key]
+                return samples.get("正常", "")
+
+            if "为空" in point_name or "空值" in point_name:
+                value = pick("空值")
+            elif "边界" in point_name or "最小" in point_name or "最大" in point_name:
+                value = pick("边界值")
+            elif "超长" in point_name:
+                value = pick("超长")
             elif "注入" in lower_name or "sql" in lower_name:
-                value = samples.get("SQL注入") or samples.get("正常", "")
+                value = pick("SQL注入")
             elif "xss" in lower_name:
-                value = samples.get("XSS") or samples.get("正常", "")
-            elif "非法" in point_name or "格式" in point_name or "特殊" in point_name:
-                value = samples.get("非法格式") or samples.get("特殊字符") or samples.get("正常", "")
+                value = pick("XSS")
+            elif "非法" in point_name or "格式" in point_name:
+                value = pick("非法")
+            elif "特殊" in point_name:
+                value = pick("特殊字符")
+            elif "重复" in point_name:
+                value = pick("重复")
+            elif "中文" in point_name:
+                value = pick("中文")
+            elif "英文" in point_name or "english" in lower_name:
+                value = pick("英文")
+            elif "数字" in point_name or "数值" in point_name:
+                value = pick("数字")
             else:
-                value = samples.get("正常") or ""
-            lines.append(f"{item.get('field', '字段')}：{value}")
+                value = pick("正常")
+            # 空值按规范示例显示为 ""
+            display = '""' if value == "" else value
+            lines.append(f"{item.get('field', '字段')}：{display}")
         return "\n".join(lines)
 
     def _chat_demo(self, user_prompt: str) -> str:

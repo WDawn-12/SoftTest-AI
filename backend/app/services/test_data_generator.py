@@ -7,18 +7,20 @@ import json
 import re
 from pathlib import Path
 
-# 类别顺序（与模板中的 categories 键一致）
+# 类别顺序（软件测试规范要求的 12 类数据，与模板中的 categories 键一致）
 CATEGORY_ORDER = [
     "正常",
     "空值",
+    "边界值",
     "超长",
-    "最小值",
-    "最大值",
     "特殊字符",
+    "非法",
+    "重复",
     "SQL注入",
     "XSS",
-    "重复数据",
-    "非法格式",
+    "中文",
+    "英文",
+    "数字",
 ]
 
 TEMPLATES_PATH = Path(__file__).resolve().parent.parent / "data" / "test_data_templates.json"
@@ -53,15 +55,21 @@ def detect_type(field: str, type_hint: str | None = None) -> str:
 
     tokens = _tokens(field)
     lower_field = field.lower()
+    # 归一化字段名（去除下划线/连字符/空格），兼容 id_card、login_name 等写法
+    normalized = re.sub(r"[\s_\-]+", "", lower_field)
     for type_key, conf in types.items():
         if type_key == "string":
             continue
         for keyword in conf.get("keywords", []):
             kw = keyword.lower()
-            # 中文关键词直接包含匹配；英文短词（<4 字符）要求词元精确匹配，避免误判
-            if kw in field or kw in tokens:
+            kw_norm = re.sub(r"[\s_\-]+", "", kw)
+            # 中文关键词直接包含匹配；英文短词（<6 字符）要求词元精确匹配，避免误判
+            if any("\u4e00" <= ch <= "\u9fff" for ch in kw):
+                if kw in field:
+                    return type_key
+            elif kw in tokens:
                 return type_key
-            if len(kw) >= 4 and kw in lower_field:
+            elif len(kw_norm) >= 6 and kw_norm in normalized:
                 return type_key
     return templates.get("default_type", "string")
 
@@ -116,7 +124,8 @@ def build_test_data_for_point(test_point: str) -> list[dict]:
     templates = _load_templates()
     types = templates.get("types", {})
     result: list[dict] = []
-    for type_key in detect_fields(test_point):
+    # 未识别到字段时兜底使用字符串类型，保证测试数据永不为空
+    for type_key in detect_fields(test_point) or ["string"]:
         conf = types.get(type_key, {})
         categories = conf.get("categories", {})
         samples = {
