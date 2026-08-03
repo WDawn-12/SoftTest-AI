@@ -1,0 +1,22 @@
+# AITestAgent 后端依赖
+# 安装命令：pip install -r requirements.txt
+
+# Web 框架
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+
+# 数据校验与配置
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+
+# 数据库
+SQLAlchemy==2.0.51
+PyMySQL==1.2.0
+cryptography==50.0.0
+
+# 文件上传（第四阶段使用）
+python-multipart==0.0.32
+
+# 密码哈希（第二阶段登录功能使用）
+bcrypt==5.0.0
