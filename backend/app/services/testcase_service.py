@@ -53,20 +53,20 @@ def run_testcase_generation(
     )
     module_name_map = {m.id: m.name for m in modules}
     module_id_map = {m.name: m.id for m in modules}
+    project = db.get(Project, requirement.project_id)
+    project_context = build_project_context(project) if project else ""
     points_data = [
         {
             "module": module_name_map.get(tp.module_id, "核心模块"),
             "category": tp.category,
             "name": tp.name,
             # 由 Test Data Generator 生成的测试数据（不允许模型编造固定数据）
-            "test_data": build_test_data_for_point(tp.name),
+            "test_data": build_test_data_for_point(tp.name, project),
         }
         for tp in test_points
     ]
 
     prompt_length = len(json.dumps(points_data, ensure_ascii=False))
-    project = db.get(Project, requirement.project_id)
-    project_context = build_project_context(project) if project else ""
     start = time.monotonic()
     try:
         agent = TestCaseAgent(get_llm_provider(db))

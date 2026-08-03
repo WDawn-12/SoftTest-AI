@@ -237,7 +237,7 @@ class DemoProvider(LLMProvider):
         return cases
 
     def _pick_test_data(self, test_data: object, point_name: str) -> str:
-        """从生成器输出的样本中按测试点场景选取测试数据。"""
+        """从生成器输出的样本中按测试点场景选取完整测试数据。"""
         if not isinstance(test_data, list) or not test_data:
             # 兜底：使用字符串类型样本（正常服务流程不会触发）
             from app.services.test_data_generator import build_test_data_for_point
@@ -245,12 +245,35 @@ class DemoProvider(LLMProvider):
             test_data = build_test_data_for_point(point_name)
         if not test_data:
             return ""
+        lower_name = point_name.lower()
+        is_wrong = any(
+            keyword in point_name
+            for keyword in ("错误", "失败", "不正确", "无效", "wrong")
+        )
+        is_empty = "为空" in point_name or "空值" in point_name
+        is_boundary = any(
+            keyword in point_name for keyword in ("边界", "最小", "最大")
+        )
+        is_overlong = "超长" in point_name
+        is_sql = "注入" in lower_name or "sql" in lower_name
+        is_xss = "xss" in lower_name
+        is_invalid_format = "非法" in point_name or "格式" in point_name
+        is_special = "特殊" in point_name
+        is_repeat = "重复" in point_name
+        is_chinese = "中文" in point_name
+        is_english = "英文" in point_name or "english" in lower_name
+        is_number = "数字" in point_name or "数值" in point_name
+
         lines = []
         for item in test_data:
             samples = item.get("samples") if isinstance(item, dict) else {}
             if not isinstance(samples, dict):
                 continue
-            lower_name = point_name.lower()
+            field = item.get("field", "")
+            is_password_field = "password" in field
+            is_username_field = "username" in field
+            mentioned_username = "用户名" in point_name or "账号" in point_name
+            mentioned_password = "密码" in point_name
 
             def pick(case_key: str) -> str:
                 """按类别键取值；缺失时回退正常值（空字符串是合法取值，不能回退）。"""
@@ -258,28 +281,89 @@ class DemoProvider(LLMProvider):
                     return samples[case_key]
                 return samples.get("正常", "")
 
-            if "为空" in point_name or "空值" in point_name:
-                value = pick("空值")
-            elif "边界" in point_name or "最小" in point_name or "最大" in point_name:
-                value = pick("边界值")
-            elif "超长" in point_name:
-                value = pick("超长")
-            elif "注入" in lower_name or "sql" in lower_name:
+            if is_empty:
+                # 空值只作用于测试点描述中提到的字段，其余字段保持正常值
+                if is_username_field and ("用户名" in point_name or "账号" in point_name):
+                    value = pick("空值")
+                elif is_password_field and "密码" in point_name:
+                    value = pick("空值")
+                else:
+                    value = pick("正常")
+            elif is_boundary:
+                value = (
+                    pick("边界值")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_overlong:
+                value = (
+                    pick("超长")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_sql:
                 value = pick("SQL注入")
-            elif "xss" in lower_name:
+            elif is_xss:
                 value = pick("XSS")
-            elif "非法" in point_name or "格式" in point_name:
-                value = pick("非法")
-            elif "特殊" in point_name:
-                value = pick("特殊字符")
-            elif "重复" in point_name:
-                value = pick("重复")
-            elif "中文" in point_name:
-                value = pick("中文")
-            elif "英文" in point_name or "english" in lower_name:
-                value = pick("英文")
-            elif "数字" in point_name or "数值" in point_name:
-                value = pick("数字")
+            elif is_invalid_format:
+                value = (
+                    pick("非法")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_special:
+                value = (
+                    pick("特殊字符")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_repeat:
+                value = (
+                    pick("重复")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_chinese:
+                value = (
+                    pick("中文")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_english:
+                value = (
+                    pick("英文")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_number:
+                value = (
+                    pick("数字")
+                    if (mentioned_username if is_username_field else mentioned_password if is_password_field else True)
+                    else pick("正常")
+                )
+            elif is_wrong:
+                # 密码错误：账号用正常值、密码用错误密码；账号错误：反之
+                pwd_wrong = any(
+                    keyword in point_name
+                    for keyword in ("密码错误", "密码不正确", "密码无效", "密码失败")
+                )
+                acc_wrong = any(
+                    keyword in point_name
+                    for keyword in ("账号错误", "用户名错误", "账号不正确", "用户名不正确")
+                )
+                if is_password_field:
+                    if "错误密码" in samples and (pwd_wrong or not acc_wrong):
+                        value = samples["错误密码"]
+                    else:
+                        value = pick("正常")
+                elif is_username_field:
+                    value = (
+                        pick("错误账号")
+                        if ("错误账号" in samples and acc_wrong)
+                        else pick("正常")
+                    )
+                else:
+                    value = pick("正常")
             else:
                 value = pick("正常")
             # 空值按规范示例显示为 ""

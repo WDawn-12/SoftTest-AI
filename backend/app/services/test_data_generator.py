@@ -7,6 +7,9 @@ import json
 import re
 from pathlib import Path
 
+from app.models.project import Project
+from app.services.crypto_service import decrypt_password
+
 # 类别顺序（软件测试规范要求的 12 类数据，与模板中的 categories 键一致）
 CATEGORY_ORDER = [
     "正常",
@@ -119,22 +122,68 @@ def detect_fields(text: str) -> list[str]:
     return found
 
 
-def build_test_data_for_point(test_point: str) -> list[dict]:
-    """为测试点生成配套测试数据（每类取首条样本），供 TestCase Agent 使用。"""
+def build_test_data_for_point(
+    test_point: str, project: Project | None = None
+) -> list[dict]:
+    """为测试点生成配套测试数据（每类取首条样本），供 TestCase Agent 使用。
+
+    若项目配置了被测系统真实账号密码，则自动注入：
+    - 登录场景强制补充「账号 + 密码」字段；
+    - 正常数据使用真实账号密码；
+    - 额外提供错误账号（账号+123）与错误密码（账号+123）样本。
+    """
     templates = _load_templates()
     types = templates.get("types", {})
+    login_username = getattr(project, "login_username", None) if project else None
+    # 密码在库中为加密存储，需解密后注入测试数据
+    login_password = (
+        decrypt_password(getattr(project, "login_password", None))
+        if project
+        else None
+    )
+    is_login_scene = any(
+        keyword in test_point for keyword in ("登录", "登陆", "账号", "密码", "认证")
+    )
+
     result: list[dict] = []
-    # 未识别到字段时兜底使用字符串类型，保证测试数据永不为空
-    for type_key in detect_fields(test_point) or ["string"]:
+    field_types = detect_fields(test_point) or ["string"]
+    # 配置了真实账号且测试点涉及登录/账号/密码时，强制补充账号与密码字段，保证数据完整
+    need_credentials = bool(login_username or login_password)
+    login_related = is_login_scene or "username" in field_types or "password" in field_types
+    if need_credentials and login_related:
+        if field_types == ["string"]:
+            field_types = ["username", "password"]
+        if "username" not in field_types:
+            field_types.insert(0, "username")
+        if "password" not in field_types:
+            field_types.append("password")
+
+    for type_key in field_types:
         conf = types.get(type_key, {})
         categories = conf.get("categories", {})
         samples = {
             case: (_expand(values[0]) if (values := categories.get(case)) else "")
             for case in CATEGORY_ORDER
         }
+        # 注入项目真实被测系统账号密码（具体化测试数据）
+        if type_key == "username" and login_username:
+            samples["正常"] = login_username
+            samples["重复"] = login_username
+            samples["错误账号"] = f"{login_username}123"
+        elif type_key == "password" and login_password:
+            samples["正常"] = login_password
+            wrong_password = f"{login_username or 'user'}123"
+            samples["错误密码"] = wrong_password
+            samples["非法"] = wrong_password
+        # 展示名称贴合被测系统语境（账号/密码）
+        field_name = conf.get("name", type_key)
+        if type_key == "username" and login_username and "账号" in test_point:
+            field_name = "账号"
+        if type_key == "password" and login_password and "密码" in test_point:
+            field_name = "密码"
         result.append(
             {
-                "field": f"{conf.get('name', type_key)}（{type_key}）",
+                "field": f"{field_name}（{type_key}）",
                 "samples": samples,
             }
         )
