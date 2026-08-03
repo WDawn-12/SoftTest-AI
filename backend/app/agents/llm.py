@@ -3,6 +3,8 @@ import json
 import re
 from abc import ABC, abstractmethod
 
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
 
 
@@ -263,19 +265,37 @@ class DemoProvider(LLMProvider):
         return "\n".join(lines)
 
 
-def get_llm_provider() -> LLMProvider:
-    """根据配置创建大模型供应商实例（openai / deepseek / demo）。"""
-    provider = settings.AI_PROVIDER.strip().lower()
+def get_llm_provider(db: Session | None = None) -> LLMProvider:
+    """创建大模型供应商实例；传入 db 时优先使用系统设置（数据库）中的配置。"""
+    if db is not None:
+        from app.services.system_settings_service import get_setting
+
+        provider = get_setting(db, "ai_provider").strip().lower()
+        openai_key = get_setting(db, "openai_api_key")
+        openai_base_url = get_setting(db, "openai_base_url")
+        openai_model = get_setting(db, "openai_model")
+        deepseek_key = get_setting(db, "deepseek_api_key")
+        deepseek_base_url = get_setting(db, "deepseek_base_url")
+        deepseek_model = get_setting(db, "deepseek_model")
+    else:
+        provider = settings.AI_PROVIDER.strip().lower()
+        openai_key = settings.OPENAI_API_KEY
+        openai_base_url = settings.OPENAI_BASE_URL
+        openai_model = settings.OPENAI_MODEL
+        deepseek_key = settings.DEEPSEEK_API_KEY
+        deepseek_base_url = settings.DEEPSEEK_BASE_URL
+        deepseek_model = settings.DEEPSEEK_MODEL
+
     if provider == "openai":
-        if not settings.OPENAI_API_KEY:
+        if not openai_key:
             raise ValueError("未配置 OPENAI_API_KEY，请在系统设置或 .env 中配置")
         return OpenAILikeProvider(
-            "openai", settings.OPENAI_API_KEY, settings.OPENAI_BASE_URL, settings.OPENAI_MODEL
+            "openai", openai_key, openai_base_url, openai_model
         )
     if provider == "deepseek":
-        if not settings.DEEPSEEK_API_KEY:
+        if not deepseek_key:
             raise ValueError("未配置 DEEPSEEK_API_KEY，请在系统设置或 .env 中配置")
         return OpenAILikeProvider(
-            "deepseek", settings.DEEPSEEK_API_KEY, settings.DEEPSEEK_BASE_URL, settings.DEEPSEEK_MODEL
+            "deepseek", deepseek_key, deepseek_base_url, deepseek_model
         )
     return DemoProvider()

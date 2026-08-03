@@ -1,5 +1,6 @@
 """AI 聊天业务逻辑：上下文记忆、项目知识库与回复生成。"""
 import json
+import time
 
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,8 @@ from app.agents.llm import get_llm_provider
 from app.models.chat_history import ChatHistory
 from app.models.requirement import Requirement
 from app.models.test_case import TestCase
+from app.services.ai_log_service import log_ai_call
+from app.services.system_settings_service import get_setting
 
 HISTORY_LIMIT = 10  # 注入对话上下文的最近消息条数
 KNOWLEDGE_LIMIT = 8000  # 项目知识库文本上限
@@ -76,10 +79,39 @@ def build_reply(
     """调用 ChatAgent 生成回复并保存到聊天记录。"""
     history = get_recent_history(db, user_id, project_id)
     knowledge = build_project_knowledge(db, project_id)
+    prompt_length = (
+        len(question)
+        + len(knowledge)
+        + sum(len(message.content) for message in history)
+    )
+    start = time.monotonic()
     try:
-        agent = ChatAgent(get_llm_provider())
-        reply_content = agent.respond(question, history, knowledge)
+        agent = ChatAgent(get_llm_provider(db))
+        system_prompt = get_setting(db, "prompt_chat")
+        reply_content = agent.respond(question, history, knowledge, system_prompt)
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="Chat",
+            provider=agent.provider_name,
+            prompt_length=prompt_length,
+            response_length=len(reply_content),
+            duration_ms=duration_ms,
+        )
     except Exception as exc:  # 模型调用/密钥配置失败
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="Chat",
+            provider=None,
+            prompt_length=prompt_length,
+            response_length=0,
+            duration_ms=duration_ms,
+            status="failed",
+            error_message=str(exc)[:500],
+        )
         reply_content = f"（AI 服务调用失败：{exc}，请检查 API 配置）"
     assistant = ChatHistory(
         user_id=user_id,

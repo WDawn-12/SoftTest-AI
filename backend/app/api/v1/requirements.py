@@ -183,7 +183,7 @@ def parse_requirement(
 ) -> ParseResultOut:
     """调用 Requirement Agent 解析需求，保存结构化结果与功能模块。"""
     requirement = _get_requirement(db, project_id, requirement_id, current_user)
-    run_requirement_parse(db, requirement)
+    run_requirement_parse(db, requirement, current_user.id)
     return ParseResultOut(
         requirement_id=requirement.id,
         parse_status=requirement.parse_status,
@@ -227,7 +227,7 @@ def generate_test_points(
     """调用 TestPoint Agent 按功能点生成五类测试点并保存（可重新生成）。"""
     requirement = _get_requirement(db, project_id, requirement_id, current_user)
     try:
-        created = run_testpoint_generation(db, requirement)
+        created = run_testpoint_generation(db, requirement, current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return build_testpoint_out(db, created)

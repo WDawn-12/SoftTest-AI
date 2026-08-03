@@ -175,9 +175,54 @@ CREATE TABLE IF NOT EXISTS `test_points` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试点表';
 
 -- ------------------------------------------------------------
+-- 9. 系统设置表 system_settings
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `system_settings` (
+  `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '设置ID',
+  `setting_key`   VARCHAR(100) NOT NULL COMMENT '配置键',
+  `setting_value` TEXT         DEFAULT NULL COMMENT '配置值',
+  `description`   VARCHAR(255) DEFAULT NULL COMMENT '配置说明',
+  `created_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_system_settings_key` (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统设置表';
+
+-- ------------------------------------------------------------
+-- 10. AI 调用日志表 ai_call_logs
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ai_call_logs` (
+  `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+  `user_id`         BIGINT       DEFAULT NULL COMMENT '操作用户ID',
+  `agent`           VARCHAR(50)  NOT NULL COMMENT 'Agent：Requirement/TestPoint/TestCase/Chat',
+  `provider`        VARCHAR(20)  DEFAULT NULL COMMENT '模型供应商：openai/deepseek/demo',
+  `prompt_length`   INT          NOT NULL DEFAULT 0 COMMENT '提示词长度',
+  `response_length` INT          NOT NULL DEFAULT 0 COMMENT '回复长度',
+  `duration_ms`     INT          NOT NULL DEFAULT 0 COMMENT '耗时（毫秒）',
+  `status`          VARCHAR(20)  NOT NULL DEFAULT 'success' COMMENT '状态：success/failed',
+  `error_message`   VARCHAR(500) DEFAULT NULL COMMENT '失败原因',
+  `created_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_ai_call_logs_user_id` (`user_id`),
+  KEY `idx_ai_call_logs_created_at` (`created_at`),
+  CONSTRAINT `fk_ai_call_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI 调用日志表';
+
+-- ------------------------------------------------------------
 -- 初始数据：管理员账号 admin / admin123
 -- 密码为 bcrypt 哈希；登录功能上线后请立即修改默认密码。
 -- ------------------------------------------------------------
 INSERT INTO `users` (`username`, `password_hash`, `nickname`, `role`)
 VALUES ('admin', '$2b$12$7Gq7//syYe5etUjTyutQMuPc2IihEomU1TnoMe1S9YZUtdoMeSRTq', '系统管理员', 'admin')
 ON DUPLICATE KEY UPDATE `username` = `username`;
+
+-- 系统设置默认值（管理员可在系统设置页面修改）
+INSERT IGNORE INTO `system_settings` (`setting_key`, `setting_value`, `description`) VALUES
+('ai_provider', 'demo', 'AI 供应商：openai / deepseek / demo'),
+('openai_api_key', '', 'OpenAI API Key'),
+('openai_base_url', 'https://api.openai.com/v1', 'OpenAI Base URL'),
+('openai_model', 'gpt-4o-mini', 'OpenAI 模型'),
+('deepseek_api_key', '', 'DeepSeek API Key'),
+('deepseek_base_url', 'https://api.deepseek.com/v1', 'DeepSeek Base URL'),
+('deepseek_model', 'deepseek-chat', 'DeepSeek 模型');

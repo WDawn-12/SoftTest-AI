@@ -1,4 +1,7 @@
 """测试用例生成业务逻辑：调用 TestCase Agent 并保存结果。"""
+import json
+import time
+
 from sqlalchemy.orm import Session
 
 from app.agents.llm import get_llm_provider
@@ -8,6 +11,8 @@ from app.models.requirement import Requirement
 from app.models.test_case import TestCase
 from app.models.test_point import TestPoint
 from app.schemas.testcase import TestCaseOut
+from app.services.ai_log_service import log_ai_call
+from app.services.system_settings_service import get_setting
 
 # 优先级归一化映射：兼容模型输出的中英文写法
 PRIORITY_MAP = {
@@ -54,11 +59,36 @@ def run_testcase_generation(
         for tp in test_points
     ]
 
+    prompt_length = len(json.dumps(points_data, ensure_ascii=False))
+    start = time.monotonic()
     try:
-        agent = TestCaseAgent(get_llm_provider())
-        result = agent.generate(points_data)
+        agent = TestCaseAgent(get_llm_provider(db))
+        system_prompt = get_setting(db, "prompt_testcase")
+        result = agent.generate(points_data, system_prompt)
         cases = result.get("test_cases", [])
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="TestCase",
+            provider=agent.provider_name,
+            prompt_length=prompt_length,
+            response_length=len(json.dumps(cases, ensure_ascii=False)),
+            duration_ms=duration_ms,
+        )
     except Exception as exc:  # 模型调用/密钥配置/输出解析失败
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="TestCase",
+            provider=None,
+            prompt_length=prompt_length,
+            response_length=0,
+            duration_ms=duration_ms,
+            status="failed",
+            error_message=str(exc)[:500],
+        )
         raise ValueError(f"测试用例生成失败：{exc}") from exc
 
     if not cases:

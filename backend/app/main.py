@@ -1,9 +1,21 @@
 """AITestAgent 后端入口（FastAPI）。"""
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
 
 from app.api.v1 import api_router
+from app.api.middleware import OperationLogMiddleware
 from app.core.config import settings
+
+# 日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("aitest")
 
 # 创建 FastAPI 应用实例
 app = FastAPI(
@@ -24,8 +36,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 操作日志中间件
+app.add_middleware(OperationLogMiddleware)
+
 # 注册 API 路由（统一前缀 /api/v1）
 app.include_router(api_router, prefix="/api/v1")
+
+
+# 全局异常处理：未捕获异常统一返回 500 JSON，避免泄露内部错误
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("未处理异常: %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500, content={"detail": "服务器内部错误，请稍后重试"}
+    )
 
 
 @app.get("/", summary="服务信息", tags=["系统"])

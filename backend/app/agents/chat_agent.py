@@ -13,10 +13,16 @@ SYSTEM_PROMPT = """你是一名软件测试助手，帮助测试人员分析需�
 class ChatAgent(BaseAgent):
     """聊天 Agent：基于项目知识库与对话历史生成 Markdown 回复。"""
 
-    def respond(self, question: str, history: list, knowledge: str) -> str:
+    def respond(
+        self,
+        question: str,
+        history: list,
+        knowledge: str,
+        system_prompt: str | None = None,
+    ) -> str:
         """生成回复文本。"""
         user_prompt = self._build_user_prompt(question, history, knowledge)
-        raw = self._provider.chat(SYSTEM_PROMPT, user_prompt)
+        raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         return raw.strip()
 
     def _build_user_prompt(

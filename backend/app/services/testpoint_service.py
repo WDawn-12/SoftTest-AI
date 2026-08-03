@@ -1,5 +1,6 @@
 """测试点生成业务逻辑：调用 TestPoint Agent 并保存结果。"""
 import json
+import time
 
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,8 @@ from app.models.module import Module
 from app.models.requirement import Requirement
 from app.models.test_point import TestPoint
 from app.schemas.testpoint import TestPointOut
+from app.services.ai_log_service import log_ai_call
+from app.services.system_settings_service import get_setting
 
 # 类别归一化映射：兼容模型输出的中英文写法
 CATEGORY_MAP = {
@@ -35,7 +38,7 @@ CATEGORY_MAP = {
 
 
 def run_testpoint_generation(
-    db: Session, requirement: Requirement
+    db: Session, requirement: Requirement, user_id: int
 ) -> list[TestPoint]:
     """调用 TestPoint Agent 生成五类测试点并保存（重新生成时先清旧数据）。"""
     modules = (
@@ -46,13 +49,37 @@ def run_testpoint_generation(
     )
     functions = _collect_functions(requirement, modules)
 
+    content = requirement.content or ""
+    prompt_length = len(json.dumps(functions, ensure_ascii=False)) + len(content)
+    start = time.monotonic()
     try:
-        agent = TestPointAgent(get_llm_provider())
-        result = agent.generate(
-            functions, requirement.content or "", requirement.file_name
-        )
+        agent = TestPointAgent(get_llm_provider(db))
+        system_prompt = get_setting(db, "prompt_testpoint")
+        result = agent.generate(functions, content, requirement.file_name, system_prompt)
         points = result.get("test_points", [])
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="TestPoint",
+            provider=agent.provider_name,
+            prompt_length=prompt_length,
+            response_length=len(json.dumps(points, ensure_ascii=False)),
+            duration_ms=duration_ms,
+        )
     except Exception as exc:  # 模型调用/密钥配置/输出解析失败
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="TestPoint",
+            provider=None,
+            prompt_length=prompt_length,
+            response_length=0,
+            duration_ms=duration_ms,
+            status="failed",
+            error_message=str(exc)[:500],
+        )
         raise ValueError(f"测试点生成失败：{exc}") from exc
 
     if not points:

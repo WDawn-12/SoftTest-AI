@@ -50,7 +50,7 @@ graph LR
 | 页面 | 说明 | 开发阶段 |
 | --- | --- | --- |
 | 登录 | 用户名密码登录，JWT 认证（含注册） | ✅ 已完成 |
-| Dashboard | 项目、测试点、测试用例统计概览 | 后续阶段 |
+| Dashboard | 项目、需求、测试点、测试用例统计概览 | ✅ 已完成 |
 | 项目管理 | 项目 CRUD（分页、搜索） | ✅ 已完成 |
 | 新建项目 | 创建项目表单 | ✅ 已完成 |
 | 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
@@ -58,7 +58,7 @@ graph LR
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
 | AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
-| 系统设置 | AI 接口配置（OpenAI / DeepSeek）等 | 第十阶段 |
+| 系统设置 | 模型配置、API Key、Prompt 模板、操作/AI 日志（管理员） | ✅ 已完成 |
 
 ## 5. 项目目录结构
 
@@ -175,7 +175,7 @@ pnpm build   # 产物输出到 dist/
 
 ## 8. 数据库设计
 
-共 8 张表，完整 DDL 见 [docs/sql/init.sql](docs/sql/init.sql)：
+共 10 张表，完整 DDL 见 [docs/sql/init.sql](docs/sql/init.sql)：
 
 | 表名 | 说明 | 关键字段 |
 | --- | --- | --- |
@@ -187,6 +187,8 @@ pnpm build   # 产物输出到 dist/
 | test_cases | 测试用例 | project_id、module_id、case_no、test_point、priority、steps、expected_result |
 | chat_history | AI 聊天记录 | user_id、project_id、role、content |
 | operation_logs | 操作日志 | user_id、action、module、detail、ip |
+| system_settings | 系统设置 | setting_key（唯一）、setting_value、description |
+| ai_call_logs | AI 调用日志 | user_id、agent、provider、耗时、状态 |
 
 约定：所有表使用 `utf8mb4` 字符集、InnoDB 引擎，统一包含 `created_at` / `updated_at` 时间戳字段，主键为自增 `BIGINT`。
 
@@ -238,6 +240,11 @@ pnpm build   # 产物输出到 dist/
 | POST | /api/v1/projects/{project_id}/chat/messages | 发送消息（AI 对话） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/chat/history | 聊天历史（分页） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/chat/history | 清空聊天记录 | 创建人/管理员 |
+| GET | /api/v1/dashboard/stats | 仪表盘统计 | 登录用户 |
+| GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
+| PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
+| GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
+| GET | /api/v1/system/logs/ai | AI 调用日志（分页） | 管理员 |
 
 ## 10. Excel 导出格式
 
@@ -266,6 +273,8 @@ pnpm build   # 产物输出到 dist/
 
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
 
+**系统优化（已完成）**：操作日志中间件自动记录写操作；AI 调用日志记录每个 Agent 的调用（供应商、输入/输出长度、耗时、状态）；系统设置支持模型配置、API Key 与 Prompt 模板在线修改（数据库优先、环境变量兜底）；全局异常处理统一返回友好错误；Dashboard 展示统计数据。
+
 ## 11. 开发路线图
 
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
@@ -277,7 +286,7 @@ pnpm build   # 产物输出到 dist/
 - [x] 第七阶段：测试用例生成
 - [x] 第八阶段：Excel 导出
 - [x] 第九阶段：AI 聊天
-- [ ] 第十阶段：系统优化
+- [x] 第十阶段：系统优化
 - [ ] 第十一阶段：Docker 部署
 - [ ] 第十二阶段：答辩准备
 

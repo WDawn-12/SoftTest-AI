@@ -24,10 +24,16 @@ SYSTEM_PROMPT = """你是一名资深的软件测试设计专家。根据给定�
 class TestPointAgent(BaseAgent):
     """测试点生成 Agent：根据功能点生成五类测试点。"""
 
-    def generate(self, functions: list[dict], content: str, file_name: str) -> dict:
+    def generate(
+        self,
+        functions: list[dict],
+        content: str,
+        file_name: str,
+        system_prompt: str | None = None,
+    ) -> dict:
         """生成测试点，返回结构化 JSON 字典。"""
         user_prompt = self._build_user_prompt(functions, content, file_name)
-        raw = self._provider.chat(SYSTEM_PROMPT, user_prompt)
+        raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         points = data.get("test_points")
         if not isinstance(points, list) or not points:

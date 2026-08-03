@@ -31,10 +31,12 @@ business_flows 至少 2 个；risks 至少 3 个。"""
 class RequirementAgent(BaseAgent):
     """需求解析 Agent：调用大模型从需求文档中提取结构化信息。"""
 
-    def parse(self, content: str, file_name: str) -> dict:
+    def parse(
+        self, content: str, file_name: str, system_prompt: str | None = None
+    ) -> dict:
         """解析需求文本，返回结构化 JSON 字典。"""
         user_prompt = self._build_user_prompt(content, file_name)
-        raw = self._provider.chat(SYSTEM_PROMPT, user_prompt)
+        raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         # 校验必需字段
         for key in ("summary", "modules", "roles", "business_flows", "risks"):

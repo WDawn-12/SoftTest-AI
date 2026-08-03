@@ -29,10 +29,12 @@ SYSTEM_PROMPT = """你是一名资深的软件测试用例设计专家。根据�
 class TestCaseAgent(BaseAgent):
     """测试用例生成 Agent：根据测试点生成完整测试用例。"""
 
-    def generate(self, test_points: list[dict]) -> dict:
+    def generate(
+        self, test_points: list[dict], system_prompt: str | None = None
+    ) -> dict:
         """生成测试用例，返回结构化 JSON 字典。"""
         user_prompt = self._build_user_prompt(test_points)
-        raw = self._provider.chat(SYSTEM_PROMPT, user_prompt)
+        raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         cases = data.get("test_cases")
         if not isinstance(cases, list) or not cases:
