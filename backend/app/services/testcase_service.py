@@ -15,6 +15,7 @@ from app.schemas.testcase import TestCaseOut
 from app.services.ai_log_service import log_ai_call
 from app.services.system_settings_service import get_setting
 from app.services.sut_service import build_project_context
+from app.services.test_data_generator import build_test_data_for_point
 
 # 优先级归一化映射：兼容模型输出的中英文写法
 PRIORITY_MAP = {
@@ -57,6 +58,8 @@ def run_testcase_generation(
             "module": module_name_map.get(tp.module_id, "核心模块"),
             "category": tp.category,
             "name": tp.name,
+            # 由 Test Data Generator 生成的测试数据（不允许模型编造固定数据）
+            "test_data": build_test_data_for_point(tp.name),
         }
         for tp in test_points
     ]

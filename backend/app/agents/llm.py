@@ -222,13 +222,7 @@ class DemoProvider(LLMProvider):
                     "module": module,
                     "title": title,
                     "test_point": name,
-                    "test_data": {
-                        "normal": "有效账号与正确输入数据",
-                        "exception": "非法字符、错误格式、异常操作等数据",
-                        "boundary": "最小/最大长度、空值、临界值等数据",
-                        "security": "越权访问、注入、弱口令等攻击数据",
-                        "compatibility": "不同浏览器/分辨率/设备环境数据",
-                    }.get(category, "有效输入数据"),
+                    "test_data": self._pick_test_data(point.get("test_data"), name),
                     "priority": priority,
                     "preconditions": "系统运行正常，当前用户具备相应操作权限",
                     "steps": [
@@ -237,10 +231,37 @@ class DemoProvider(LLMProvider):
                         "观察并记录系统反馈",
                     ],
                     "expected_result": expected,
-                    "remark": "由 TestCase Agent 生成，可人工编辑",
+                    "remark": "由 TestCase Agent 生成，测试数据来自 Test Data Generator",
                 }
             )
         return cases
+
+    def _pick_test_data(self, test_data: object, point_name: str) -> str:
+        """从生成器输出的样本中按测试点场景选取测试数据。"""
+        if not isinstance(test_data, list) or not test_data:
+            return "（测试数据生成器未识别到字段）"
+        lines = []
+        for item in test_data:
+            samples = item.get("samples") if isinstance(item, dict) else {}
+            if not isinstance(samples, dict):
+                continue
+            lower_name = point_name.lower()
+            if "为空" in point_name or "空值" in point_name or "为空" in lower_name:
+                value = samples.get("空值") or samples.get("正常", "")
+            elif "超长" in point_name or "边界" in point_name or "最大" in point_name:
+                value = samples.get("超长") or samples.get("最大值") or samples.get("正常", "")
+            elif "最小" in point_name:
+                value = samples.get("最小值") or samples.get("正常", "")
+            elif "注入" in lower_name or "sql" in lower_name:
+                value = samples.get("SQL注入") or samples.get("正常", "")
+            elif "xss" in lower_name:
+                value = samples.get("XSS") or samples.get("正常", "")
+            elif "非法" in point_name or "格式" in point_name or "特殊" in point_name:
+                value = samples.get("非法格式") or samples.get("特殊字符") or samples.get("正常", "")
+            else:
+                value = samples.get("正常") or ""
+            lines.append(f"{item.get('field', '字段')}：{value}")
+        return "\n".join(lines)
 
     def _chat_demo(self, user_prompt: str) -> str:
         """聊天任务的演示输出（Markdown）。"""

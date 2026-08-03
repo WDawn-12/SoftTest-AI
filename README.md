@@ -56,6 +56,7 @@ graph LR
 | 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
 | AI 解析结果 | Requirement Agent 解析：模块、功能点、角色、流程、风险 | ✅ 已完成 |
 | 项目详情（被测系统） | 绑定被测系统（名称/网址/类型/浏览器/账号）、测试连接 | ✅ 已完成 |
+| 测试数据生成器 | 字段类型自动识别 + 10 类测试数据（正常/空值/边界/注入/XSS 等） | ✅ 已完成 |
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
 | AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
@@ -252,6 +253,7 @@ pnpm build   # 产物输出到 dist/
 | PUT | /api/v1/projects/{id}/system | 更新被测系统 | 创建人/管理员 |
 | DELETE | /api/v1/projects/{id}/system | 删除被测系统 | 创建人/管理员 |
 | POST | /api/v1/projects/{id}/system/test-connection | 测试连接（检测目标网址） | 创建人/管理员 |
+| POST | /api/v1/generator/test-data | 生成测试数据（自动识别字段类型） | 登录用户 |
 | GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
 | PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
 | GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
@@ -282,6 +284,8 @@ pnpm build   # 产物输出到 dist/
 
 **TestCase Agent（已完成）**：根据测试点生成完整测试用例（功能、测试点、测试数据、优先级、前置条件、步骤、预期结果），保存至 `test_cases` 表；编号按项目顺序自动生成（TC0001、TC0002……），支持重新生成与人工编辑删除，并支持按筛选条件批量导出 Excel。
 
+**Test Data Generator（扩展功能）**：独立服务（`app/services/test_data_generator.py`），数据模板外置于 `app/data/test_data_templates.json`（支持扩展字段类型与配置模板）；按字段名称自动识别类型（用户名/密码/邮箱/手机号/金额/日期/URL/字符串），每类生成 10 种测试数据（正常、空值、超长、最小值、最大值、特殊字符、SQL 注入、XSS、重复数据、非法格式）。TestCase Agent 生成用例前先读取测试点并调用生成器匹配测试数据，禁止编造固定数据。
+
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
 
 **系统优化（已完成）**：操作日志中间件自动记录写操作；AI 调用日志记录每个 Agent 的调用（供应商、输入/输出长度、耗时、状态）；系统设置支持模型配置、API Key 与 Prompt 模板在线修改（数据库优先、环境变量兜底）；全局异常处理统一返回友好错误；Dashboard 展示统计数据。
@@ -303,6 +307,7 @@ pnpm build   # 产物输出到 dist/
 - [x] 第十一阶段：Docker 部署与收尾
 - [x] 第十二阶段：答辩准备（测试报告、示例数据）
 - [x] 扩展功能：被测系统管理（SUT）
+- [x] 扩展功能：Test Data Generator（测试数据生成器）
 
 ## 13. 系统测试
 

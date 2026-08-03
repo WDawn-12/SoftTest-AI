@@ -5,6 +5,7 @@ from app.api.v1 import (
     auth,
     chat,
     dashboard,
+    generator,
     health,
     projects,
     requirements,
@@ -28,3 +29,4 @@ api_router.include_router(chat.router)
 api_router.include_router(systems.router)
 api_router.include_router(system.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(generator.router)

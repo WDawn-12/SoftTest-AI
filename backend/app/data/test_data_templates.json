@@ -1,0 +1,133 @@
+{
+  "default_type": "string",
+  "types": {
+    "username": {
+      "name": "用户名",
+      "keywords": ["username", "user_name", "user-name", "account", "login_name", "nickname", "账号", "用户名", "昵称"],
+      "categories": {
+        "正常": ["admin", "test001", "zhangsan"],
+        "空值": [null],
+        "超长": [{"repeat": "a", "times": 100}],
+        "最小值": ["a"],
+        "最大值": [{"repeat": "a", "times": 50}],
+        "特殊字符": ["admin@#"],
+        "SQL注入": ["'or'1'='1", "admin'--"],
+        "XSS": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>"],
+        "重复数据": ["admin"],
+        "非法格式": ["admin name", "用户 名"]
+      }
+    },
+    "password": {
+      "name": "密码",
+      "keywords": ["password", "pwd", "passwd", "密码"],
+      "categories": {
+        "正常": ["123456", "Admin@123"],
+        "空值": [null],
+        "超长": [{"repeat": "a", "times": 100}],
+        "最小值": ["1"],
+        "最大值": [{"repeat": "a", "times": 64}],
+        "特殊字符": ["P@ssw0rd!#"],
+        "SQL注入": ["'or'1'='1"],
+        "XSS": ["<script>alert(1)</script>"],
+        "重复数据": ["123456"],
+        "非法格式": ["ab"]
+      }
+    },
+    "email": {
+      "name": "邮箱",
+      "keywords": ["email", "e-mail", "mail", "mailbox", "邮箱", "邮件"],
+      "categories": {
+        "正常": ["test@qq.com", "user@example.com"],
+        "空值": [null],
+        "超长": [{"repeat": "a", "times": 100}],
+        "最小值": ["a@b.c"],
+        "最大值": [{"repeat": "a", "times": 254}],
+        "特殊字符": ["test!@qq.com"],
+        "SQL注入": ["'or'1'='1@x.com"],
+        "XSS": ["<script>alert(1)</script>@x.com"],
+        "重复数据": ["test@qq.com"],
+        "非法格式": ["abc", "test@", "@qq.com", "test@163"]
+      }
+    },
+    "phone": {
+      "name": "手机号",
+      "keywords": ["phone", "mobile", "telephone", "手机号", "手机", "电话"],
+      "categories": {
+        "正常": ["13800138000", "13900139000"],
+        "空值": [null],
+        "超长": [{"repeat": "1", "times": 15}],
+        "最小值": ["0"],
+        "最大值": [{"repeat": "9", "times": 11}],
+        "特殊字符": ["138-0013-8000"],
+        "SQL注入": ["'or'1'='1"],
+        "XSS": ["<script>alert(1)</script>"],
+        "重复数据": ["13800138000"],
+        "非法格式": ["00000000000", "11111111111", "123456789", "abcdefghijk"]
+      }
+    },
+    "amount": {
+      "name": "金额",
+      "keywords": ["price", "amount", "money", "total", "fee", "金额", "价格", "费用"],
+      "categories": {
+        "正常": ["0", "0.01", "999999999"],
+        "空值": [null],
+        "超长": [{"repeat": "9", "times": 20}],
+        "最小值": ["0"],
+        "最大值": ["999999999999999"],
+        "特殊字符": ["￥100", "1,000"],
+        "SQL注入": ["'or'1'='1"],
+        "XSS": ["<script>alert(1)</script>"],
+        "重复数据": ["0.01"],
+        "非法格式": ["-1", "abc", "1.2.3"]
+      }
+    },
+    "date": {
+      "name": "日期",
+      "keywords": ["date", "birthday", "日期", "生日"],
+      "categories": {
+        "正常": ["2026-01-01", "2025-12-31"],
+        "空值": [null],
+        "超长": [{"repeat": "2", "times": 30}],
+        "最小值": ["0000-00-00"],
+        "最大值": ["9999-12-31"],
+        "特殊字符": ["2026/01/01", "2026年1月1日"],
+        "SQL注入": ["'or'1'='1"],
+        "XSS": ["<script>alert(1)</script>"],
+        "重复数据": ["2026-01-01"],
+        "非法格式": ["2026-02-30", "2026-13-01", "abc"]
+      }
+    },
+    "url": {
+      "name": "URL",
+      "keywords": ["url", "website", "site", "link", "网址", "链接"],
+      "categories": {
+        "正常": ["https://www.baidu.com", "http://localhost:8080"],
+        "空值": [null],
+        "超长": [{"repeat": "a", "times": 300}],
+        "最小值": ["http://a.b"],
+        "最大值": [{"repeat": "a", "times": 500}],
+        "特殊字符": ["http://example.com/?a=1&b=2"],
+        "SQL注入": ["http://example.com/'or'1'='1"],
+        "XSS": ["http://example.com/<script>alert(1)</script>"],
+        "重复数据": ["https://www.baidu.com"],
+        "非法格式": ["abc", "ftp://", "www.example.com"]
+      }
+    },
+    "string": {
+      "name": "字符串",
+      "keywords": [],
+      "categories": {
+        "正常": ["测试数据", "abc123"],
+        "空值": [null],
+        "超长": [{"repeat": "a", "times": 100}],
+        "最小值": ["a"],
+        "最大值": [{"repeat": "a", "times": 255}],
+        "特殊字符": ["!@#$%^&*()"],
+        "SQL注入": ["'or'1'='1"],
+        "XSS": ["<script>alert(1)</script>"],
+        "重复数据": ["测试数据"],
+        "非法格式": ["<invalid>"]
+      }
+    }
+  }
+}
