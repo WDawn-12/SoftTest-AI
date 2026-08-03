@@ -1,10 +1,10 @@
 """项目管理接口：CRUD + 分页 + 搜索。"""
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import or_
 
-from app.api.deps import DbDep, get_current_user
+from app.api.deps import DbDep, get_current_user, get_owned_project
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectListOut, ProjectOut, ProjectUpdate
@@ -12,17 +12,6 @@ from app.schemas.project import ProjectCreate, ProjectListOut, ProjectOut, Proje
 router = APIRouter(prefix="/projects", tags=["项目管理"])
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
-
-
-def get_owned_project(db: DbDep, project_id: int, current_user: User) -> Project:
-    """获取项目并校验归属：仅项目创建人或管理员可操作。"""
-    project = db.get(Project, project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    # 非管理员查看他人项目时返回 404，避免泄露项目存在性
-    if current_user.role != "admin" and project.owner_id != current_user.id:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
 
 
 @router.post(

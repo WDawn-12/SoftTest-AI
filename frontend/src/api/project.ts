@@ -21,6 +21,11 @@ export function createProjectApi(data: ProjectCreatePayload): Promise<Project> {
   return request.post('/v1/projects', data) as unknown as Promise<Project>
 }
 
+// 项目详情
+export function getProjectApi(id: number): Promise<Project> {
+  return request.get(`/v1/projects/${id}`) as unknown as Promise<Project>
+}
+
 // 更新项目
 export function updateProjectApi(
   id: number,

@@ -31,6 +31,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24  # 令牌有效期：默认 1 天
 
+    # 文件上传配置
+    UPLOAD_DIR: str = "uploads"  # 上传文件保存目录（相对后端运行目录）
+    MAX_UPLOAD_SIZE: int = 20 * 1024 * 1024  # 单文件大小上限：20MB
+
 
 @lru_cache
 def get_settings() -> Settings:

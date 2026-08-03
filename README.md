@@ -53,7 +53,7 @@ graph LR
 | Dashboard | 项目、测试点、测试用例统计概览 | 后续阶段 |
 | 项目管理 | 项目 CRUD（分页、搜索） | ✅ 已完成 |
 | 新建项目 | 创建项目表单 | ✅ 已完成 |
-| 上传需求文档 | 上传 Word / PDF，提取文本 | 第四阶段 |
+| 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
 | AI 解析结果 | 展示功能模块提取结果 | 第五阶段 |
 | 测试点管理 | AI 生成测试点 + 人工编辑 | 第六阶段 |
 | 测试用例管理 | AI 生成测试用例 + 人工编辑 | 第七阶段 |
@@ -219,6 +219,10 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id} | 项目详情 | 创建人/管理员 |
 | PATCH | /api/v1/projects/{project_id} | 更新项目 | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id} | 删除项目 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/upload | 上传需求文档（docx/pdf/txt/md） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/requirements | 需求文档列表（分页） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/requirements/{id} | 需求文档详情（含文本内容） | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/requirements/{id} | 删除需求文档 | 创建人/管理员 |
 
 ## 10. Excel 导出格式
 
@@ -234,7 +238,7 @@ pnpm build   # 产物输出到 dist/
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
 - [x] 第二阶段：登录（JWT 认证、用户管理）
 - [x] 第三阶段：项目管理
-- [ ] 第四阶段：上传需求文档
+- [x] 第四阶段：上传需求文档
 - [ ] 第五阶段：AI 解析需求
 - [ ] 第六阶段：测试点生成
 - [ ] 第七阶段：测试用例生成

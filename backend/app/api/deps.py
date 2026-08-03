@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.models.project import Project
 from app.models.user import User
 
 # OAuth2 密码模式：Swagger 文档自动生成「Authorize」按钮
@@ -47,3 +48,14 @@ def get_current_admin(current_user: Annotated[User, Depends(get_current_user)]) 
             status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限"
         )
     return current_user
+
+
+def get_owned_project(db: DbDep, project_id: int, current_user: User) -> Project:
+    """获取项目并校验归属：仅项目创建人或管理员可操作。"""
+    project = db.get(Project, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    # 非管理员查看他人项目时返回 404，避免泄露项目存在性
+    if current_user.role != "admin" and project.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="项目不存在")
+    return project
