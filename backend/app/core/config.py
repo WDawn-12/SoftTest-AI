@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # JWT 密钥（第二阶段登录功能使用，生产环境务必修改）
     SECRET_KEY: str = "please-change-me-in-production"
 
+    # JWT 配置
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24  # 令牌有效期：默认 1 天
+
 
 @lru_cache
 def get_settings() -> Settings:

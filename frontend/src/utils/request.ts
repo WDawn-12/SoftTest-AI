@@ -22,6 +22,14 @@ service.interceptors.request.use((config) => {
 service.interceptors.response.use(
   (response: AxiosResponse) => response.data,
   (error) => {
+    // 登录失效（401）：清除本地凭证并回到登录页
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('userInfo')
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login'
+      }
+    }
     const message = error.response?.data?.detail || error.message || '请求失败'
     ElMessage.error(message)
     return Promise.reject(error)

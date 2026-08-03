@@ -26,7 +26,20 @@
           <Fold v-else />
         </el-icon>
         <span class="header-title">{{ route.meta.title }}</span>
-        <span class="header-right">基于 AI Agent 的软件测试辅助平台</span>
+        <span class="header-right">
+          <el-dropdown @command="handleUserCommand">
+            <span class="user-name">
+              <el-icon><UserFilled /></el-icon>
+              {{ userStore.userInfo?.nickname || userStore.userInfo?.username || '未登录' }}
+              <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </span>
       </el-header>
       <el-main class="layout-main">
         <router-view />
@@ -37,8 +50,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import {
+  ArrowDown,
   ChatDotRound,
   Document,
   Expand,
@@ -49,9 +64,13 @@ import {
   Promotion,
   Setting,
   Tickets,
+  UserFilled,
 } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
+const router = useRouter()
+const userStore = useUserStore()
 const isCollapse = ref(false)
 
 // 侧边栏菜单配置（上传需求、AI 解析结果等按项目维度组织的页面，
@@ -67,6 +86,15 @@ const menuItems = [
 ]
 
 const activeMenu = computed(() => route.path)
+
+// 顶栏用户菜单
+function handleUserCommand(command: string) {
+  if (command === 'logout') {
+    userStore.logout()
+    ElMessage.success('已退出登录')
+    router.push('/login')
+  }
+}
 </script>
 
 <style scoped>
@@ -119,6 +147,15 @@ const activeMenu = computed(() => route.path)
   margin-left: auto;
   color: #909399;
   font-size: 13px;
+}
+
+.user-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #303133;
+  cursor: pointer;
+  outline: none;
 }
 
 .layout-main {

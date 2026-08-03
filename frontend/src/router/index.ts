@@ -83,6 +83,17 @@ const router = createRouter({
   routes,
 })
 
+// 路由守卫：未登录跳转登录页；已登录访问登录页跳回首页
+router.beforeEach((to) => {
+  const token = localStorage.getItem('token')
+  if (to.path !== '/login' && !token) {
+    return { path: '/login', query: { redirect: to.fullPath } }
+  }
+  if (to.path === '/login' && token) {
+    return { path: '/dashboard' }
+  }
+})
+
 // 路由守卫：同步页面标题（登录鉴权将在第二阶段接入）
 router.afterEach((to) => {
   const title = to.meta.title as string | undefined
