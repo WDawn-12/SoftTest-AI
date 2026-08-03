@@ -5,6 +5,7 @@ from app.models.operation_log import OperationLog
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.test_case import TestCase
+from app.models.test_point import TestPoint
 from app.models.user import User
 
 __all__ = [
@@ -13,6 +14,7 @@ __all__ = [
     "Requirement",
     "Module",
     "TestCase",
+    "TestPoint",
     "ChatHistory",
     "OperationLog",
 ]

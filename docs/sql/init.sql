@@ -150,6 +150,27 @@ CREATE TABLE IF NOT EXISTS `operation_logs` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
 
 -- ------------------------------------------------------------
+-- 8. 测试点表 test_points
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `test_points` (
+  `id`             BIGINT       NOT NULL AUTO_INCREMENT COMMENT '测试点ID',
+  `project_id`     BIGINT       NOT NULL COMMENT '所属项目ID',
+  `requirement_id` BIGINT       DEFAULT NULL COMMENT '来源需求ID',
+  `module_id`      BIGINT       DEFAULT NULL COMMENT '所属模块ID',
+  `name`           VARCHAR(255) NOT NULL COMMENT '测试点描述',
+  `category`       VARCHAR(50)  NOT NULL DEFAULT 'normal' COMMENT '类别：normal/exception/boundary/security/compatibility',
+  `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_test_points_project_id` (`project_id`),
+  KEY `idx_test_points_requirement_id` (`requirement_id`),
+  KEY `idx_test_points_module_id` (`module_id`),
+  CONSTRAINT `fk_test_points_project` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_test_points_requirement` FOREIGN KEY (`requirement_id`) REFERENCES `requirements` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_test_points_module` FOREIGN KEY (`module_id`) REFERENCES `modules` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试点表';
+
+-- ------------------------------------------------------------
 -- 初始数据：管理员账号 admin / admin123
 -- 密码为 bcrypt 哈希；登录功能上线后请立即修改默认密码。
 -- ------------------------------------------------------------

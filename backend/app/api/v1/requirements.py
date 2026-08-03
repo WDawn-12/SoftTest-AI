@@ -16,7 +16,9 @@ from app.schemas.requirement import (
     RequirementListOut,
     RequirementOut,
 )
+from app.schemas.testpoint import TestPointOut
 from app.services.requirement_service import run_requirement_parse
+from app.services.testpoint_service import build_testpoint_out, run_testpoint_generation
 from app.services.document_parser import extract_text
 
 router = APIRouter(prefix="/projects/{project_id}/requirements", tags=["需求文档"])
@@ -207,3 +209,23 @@ def get_parse_result(
         error_message=requirement.error_message,
         result=_load_result(requirement),
     )
+
+
+@router.post(
+    "/{requirement_id}/test-points/generate",
+    response_model=list[TestPointOut],
+    summary="生成测试点（TestPoint Agent）",
+)
+def generate_test_points(
+    project_id: int,
+    requirement_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> list[TestPointOut]:
+    """调用 TestPoint Agent 按功能点生成五类测试点并保存（可重新生成）。"""
+    requirement = _get_requirement(db, project_id, requirement_id, current_user)
+    try:
+        created = run_testpoint_generation(db, requirement)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return build_testpoint_out(db, created)

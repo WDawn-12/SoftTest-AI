@@ -1,5 +1,6 @@
 """大模型调用层：OpenAI / DeepSeek（OpenAI 兼容协议）与本地演示模式。"""
 import json
+import re
 from abc import ABC, abstractmethod
 
 from app.core.config import settings
@@ -48,9 +49,72 @@ class DemoProvider(LLMProvider):
     name = "demo"
 
     def chat(self, system_prompt: str, user_prompt: str) -> str:
-        # 仅用于未接入真实大模型的演示环境；生产环境请配置 OpenAI / DeepSeek 密钥
+        # 演示供应商：优先按「测试点生成」任务生成示例，否则返回需求解析示例
+        functions = self._extract_functions(user_prompt)
+        if functions is not None:
+            return json.dumps(
+                {"test_points": self._generate_testpoints(functions)},
+                ensure_ascii=False,
+            )
+        return self._requirement_demo(user_prompt)
+
+    def _extract_functions(self, user_prompt: str) -> list[dict] | None:
+        """从用户提示中提取功能点 JSON（TestPoint Agent 专用）。"""
+        fence = re.search(r"```json\s*(.*?)```", user_prompt, re.S)
+        if not fence:
+            return None
+        try:
+            data = json.loads(fence.group(1))
+        except json.JSONDecodeError:
+            return None
+        if isinstance(data, list) and data and "functions" in data[0]:
+            return data
+        return None
+
+    def _generate_testpoints(self, functions: list[dict]) -> list[dict]:
+        """按五类测试规则生成演示测试点。"""
+        points: list[dict] = []
+        for module in functions:
+            module_name = module.get("module", "核心模块")
+            for fn in module.get("functions", []):
+                points.extend(
+                    [
+                        {
+                            "category": "normal",
+                            "module": module_name,
+                            "name": f"验证「{fn}」功能正常可用",
+                        },
+                        {
+                            "category": "exception",
+                            "module": module_name,
+                            "name": f"验证「{fn}」在非法输入或异常操作时给出正确提示",
+                        },
+                        {
+                            "category": "boundary",
+                            "module": module_name,
+                            "name": f"验证「{fn}」输入边界值（最小/最大/空值）的处理",
+                        },
+                        {
+                            "category": "security",
+                            "module": module_name,
+                            "name": f"验证「{fn}」的权限控制与安全防护",
+                        },
+                        {
+                            "category": "compatibility",
+                            "module": module_name,
+                            "name": f"验证「{fn}」在主流浏览器/分辨率下兼容运行",
+                        },
+                    ]
+                )
+        if not points:
+            points.append(
+                {"category": "normal", "module": "核心模块", "name": "验证核心功能正常可用"}
+            )
+        return points
+
+    def _requirement_demo(self, user_prompt: str) -> str:
+        """需求解析任务的演示输出。"""
         content = user_prompt.strip()
-        # 截取「需求文档内容」之后的正文作为概述预览
         marker = "需求文档内容：\n"
         idx = content.find(marker)
         body = content[idx + len(marker) :] if idx != -1 else content
