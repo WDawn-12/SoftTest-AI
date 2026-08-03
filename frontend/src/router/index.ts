@@ -34,6 +34,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '新建项目' },
       },
       {
+        path: 'projects/:projectId/detail',
+        name: 'ProjectDetail',
+        component: () => import('@/views/project/ProjectDetailView.vue'),
+        meta: { title: '项目详情' },
+      },
+      {
         path: 'projects/:projectId/requirement/upload',
         name: 'UploadRequirement',
         component: () => import('@/views/requirement/UploadRequirementView.vue'),

@@ -55,6 +55,7 @@ graph LR
 | 新建项目 | 创建项目表单 | ✅ 已完成 |
 | 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
 | AI 解析结果 | Requirement Agent 解析：模块、功能点、角色、流程、风险 | ✅ 已完成 |
+| 项目详情（被测系统） | 绑定被测系统（名称/网址/类型/浏览器/账号）、测试连接 | ✅ 已完成 |
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
 | AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
@@ -185,7 +186,7 @@ pnpm build   # 产物输出到 dist/
 | 表名 | 说明 | 关键字段 |
 | --- | --- | --- |
 | users | 系统用户 | username（唯一）、password_hash、role、status |
-| projects | 测试项目 | name、description、status、owner_id |
+| projects | 测试项目（含被测系统信息） | name、description、status、owner_id、system_name、test_url、system_type、browser_type、login_username、login_password（加密）、system_description |
 | requirements | 需求文档 | project_id、file_name、file_path、parse_status、parse_result |
 | modules | 功能模块 | project_id、requirement_id、name、sort_order |
 | test_points | 测试点 | project_id、requirement_id、module_id、name、category |
@@ -246,6 +247,11 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id}/chat/history | 聊天历史（分页） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/chat/history | 清空聊天记录 | 创建人/管理员 |
 | GET | /api/v1/dashboard/stats | 仪表盘统计 | 登录用户 |
+| POST | /api/v1/projects/{id}/system | 创建被测系统 | 创建人/管理员 |
+| GET | /api/v1/projects/{id}/system | 获取被测系统 | 创建人/管理员 |
+| PUT | /api/v1/projects/{id}/system | 更新被测系统 | 创建人/管理员 |
+| DELETE | /api/v1/projects/{id}/system | 删除被测系统 | 创建人/管理员 |
+| POST | /api/v1/projects/{id}/system/test-connection | 测试连接（检测目标网址） | 创建人/管理员 |
 | GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
 | PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
 | GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
@@ -280,6 +286,8 @@ pnpm build   # 产物输出到 dist/
 
 **系统优化（已完成）**：操作日志中间件自动记录写操作；AI 调用日志记录每个 Agent 的调用（供应商、输入/输出长度、耗时、状态）；系统设置支持模型配置、API Key 与 Prompt 模板在线修改（数据库优先、环境变量兜底）；全局异常处理统一返回友好错误；Dashboard 展示统计数据。
 
+**被测系统管理（SUT，扩展功能）**：每个项目可绑定一个被测系统（系统名称、测试网址、系统类型、浏览器、测试账号、测试密码加密存储、系统描述）；提供测试连接（HTTP 状态码/响应时间/连通性）；Requirement / TestPoint / TestCase / Chat 四个 AI 环节自动注入被测系统信息进行分析。已有数据库升级执行 `docs/sql/migrations/002_add_sut_fields.sql`。
+
 ## 11. 开发路线图
 
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
@@ -294,6 +302,7 @@ pnpm build   # 产物输出到 dist/
 - [x] 第十阶段：系统优化
 - [x] 第十一阶段：Docker 部署与收尾
 - [x] 第十二阶段：答辩准备（测试报告、示例数据）
+- [x] 扩展功能：被测系统管理（SUT）
 
 ## 13. 系统测试
 

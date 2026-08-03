@@ -30,9 +30,12 @@ class TestPointAgent(BaseAgent):
         content: str,
         file_name: str,
         system_prompt: str | None = None,
+        project_context: str = "",
     ) -> dict:
         """生成测试点，返回结构化 JSON 字典。"""
-        user_prompt = self._build_user_prompt(functions, content, file_name)
+        user_prompt = self._build_user_prompt(
+            functions, content, file_name, project_context
+        )
         raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         points = data.get("test_points")
@@ -41,11 +44,16 @@ class TestPointAgent(BaseAgent):
         return data
 
     def _build_user_prompt(
-        self, functions: list[dict], content: str, file_name: str
+        self,
+        functions: list[dict],
+        content: str,
+        file_name: str,
+        project_context: str = "",
     ) -> str:
         functions_json = json.dumps(functions, ensure_ascii=False)
-        return (
-            f"需求文档名称：{file_name}\n\n"
-            f"功能模块与功能点：\n```json\n{functions_json}\n```\n\n"
-            f"需求文档内容：\n{content}"
-        )
+        parts = [f"需求文档名称：{file_name}"]
+        if project_context:
+            parts.append(f"被测系统信息：\n{project_context}")
+        parts.append(f"功能模块与功能点：\n```json\n{functions_json}\n```")
+        parts.append(f"需求文档内容：\n{content}")
+        return "\n\n".join(parts)

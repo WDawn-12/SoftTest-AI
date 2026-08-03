@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 from app.agents.llm import get_llm_provider
 from app.agents.testcase_agent import TestCaseAgent
 from app.models.module import Module
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.test_case import TestCase
 from app.models.test_point import TestPoint
 from app.schemas.testcase import TestCaseOut
 from app.services.ai_log_service import log_ai_call
 from app.services.system_settings_service import get_setting
+from app.services.sut_service import build_project_context
 
 # 优先级归一化映射：兼容模型输出的中英文写法
 PRIORITY_MAP = {
@@ -60,11 +62,13 @@ def run_testcase_generation(
     ]
 
     prompt_length = len(json.dumps(points_data, ensure_ascii=False))
+    project = db.get(Project, requirement.project_id)
+    project_context = build_project_context(project) if project else ""
     start = time.monotonic()
     try:
         agent = TestCaseAgent(get_llm_provider(db))
         system_prompt = get_setting(db, "prompt_testcase")
-        result = agent.generate(points_data, system_prompt)
+        result = agent.generate(points_data, system_prompt, project_context)
         cases = result.get("test_cases", [])
         duration_ms = int((time.monotonic() - start) * 1000)
         log_ai_call(

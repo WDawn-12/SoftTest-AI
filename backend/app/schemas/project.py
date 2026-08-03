@@ -2,7 +2,9 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.schemas.sut import validate_http_url
 
 ProjectStatus = Literal["active", "finished", "archived"]
 
@@ -12,6 +14,20 @@ class ProjectCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=100, description="项目名称")
     description: str | None = Field(default=None, max_length=2000, description="项目描述")
+
+    # 被测系统信息（可选，创建时一并绑定）
+    system_name: str | None = Field(default=None, max_length=100, description="被测系统名称")
+    test_url: str | None = Field(default=None, max_length=500, description="测试网址")
+    system_type: str | None = Field(default=None, description="系统类型")
+    browser_type: str | None = Field(default=None, description="浏览器类型")
+    login_username: str | None = Field(default=None, max_length=100, description="测试账号")
+    login_password: str | None = Field(default=None, max_length=200, description="测试密码")
+    system_description: str | None = Field(default=None, max_length=2000, description="系统描述")
+
+    @field_validator("test_url")
+    @classmethod
+    def _check_url(cls, value: str | None) -> str | None:
+        return validate_http_url(value)
 
 
 class ProjectUpdate(BaseModel):

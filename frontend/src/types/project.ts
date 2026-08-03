@@ -21,6 +21,13 @@ export interface ProjectListResult {
 export interface ProjectCreatePayload {
   name: string
   description?: string
+  system_name?: string
+  test_url?: string
+  system_type?: string
+  browser_type?: string
+  login_username?: string
+  login_password?: string
+  system_description?: string
 }
 
 export interface ProjectUpdatePayload {

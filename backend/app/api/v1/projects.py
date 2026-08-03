@@ -8,6 +8,7 @@ from app.api.deps import DbDep, get_current_user, get_owned_project
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.project import ProjectCreate, ProjectListOut, ProjectOut, ProjectUpdate
+from app.services.crypto_service import encrypt_password
 
 router = APIRouter(prefix="/projects", tags=["项目管理"])
 
@@ -29,6 +30,13 @@ def create_project(
         description=payload.description,
         status="active",
         owner_id=current_user.id,
+        system_name=payload.system_name,
+        test_url=payload.test_url,
+        system_type=payload.system_type,
+        browser_type=payload.browser_type,
+        login_username=payload.login_username,
+        login_password=encrypt_password(payload.login_password),
+        system_description=payload.system_description,
     )
     db.add(project)
     db.commit()

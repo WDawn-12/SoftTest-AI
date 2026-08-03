@@ -32,10 +32,14 @@ class RequirementAgent(BaseAgent):
     """需求解析 Agent：调用大模型从需求文档中提取结构化信息。"""
 
     def parse(
-        self, content: str, file_name: str, system_prompt: str | None = None
+        self,
+        content: str,
+        file_name: str,
+        system_prompt: str | None = None,
+        project_context: str = "",
     ) -> dict:
         """解析需求文本，返回结构化 JSON 字典。"""
-        user_prompt = self._build_user_prompt(content, file_name)
+        user_prompt = self._build_user_prompt(content, file_name, project_context)
         raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         # 校验必需字段
@@ -44,5 +48,11 @@ class RequirementAgent(BaseAgent):
                 raise ValueError(f"模型输出缺少字段: {key}")
         return data
 
-    def _build_user_prompt(self, content: str, file_name: str) -> str:
-        return f"需求文档名称：{file_name}\n\n需求文档内容：\n{content}"
+    def _build_user_prompt(
+        self, content: str, file_name: str, project_context: str = ""
+    ) -> str:
+        parts = [f"需求文档名称：{file_name}"]
+        if project_context:
+            parts.append(f"被测系统信息：\n{project_context}")
+        parts.append(f"需求文档内容：\n{content}")
+        return "\n\n".join(parts)

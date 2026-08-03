@@ -8,9 +8,11 @@ from app.agents.llm import get_llm_provider
 from app.agents.requirement_agent import RequirementAgent
 from app.core.config import settings
 from app.models.module import Module
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.services.ai_log_service import log_ai_call
 from app.services.system_settings_service import get_setting
+from app.services.sut_service import build_project_context
 
 
 def run_requirement_parse(
@@ -25,12 +27,16 @@ def run_requirement_parse(
         return requirement
 
     content = requirement.content[: settings.AI_MAX_CONTENT_LENGTH]
+    project = db.get(Project, requirement.project_id)
+    project_context = build_project_context(project) if project else ""
     start = time.monotonic()
     try:
         provider = get_llm_provider(db)
         agent = RequirementAgent(provider)
         system_prompt = get_setting(db, "prompt_requirement")
-        result = agent.parse(content, requirement.file_name, system_prompt)
+        result = agent.parse(
+            content, requirement.file_name, system_prompt, project_context
+        )
         duration_ms = int((time.monotonic() - start) * 1000)
         log_ai_call(
             db,

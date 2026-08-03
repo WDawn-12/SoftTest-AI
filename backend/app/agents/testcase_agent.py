@@ -30,10 +30,13 @@ class TestCaseAgent(BaseAgent):
     """测试用例生成 Agent：根据测试点生成完整测试用例。"""
 
     def generate(
-        self, test_points: list[dict], system_prompt: str | None = None
+        self,
+        test_points: list[dict],
+        system_prompt: str | None = None,
+        project_context: str = "",
     ) -> dict:
         """生成测试用例，返回结构化 JSON 字典。"""
-        user_prompt = self._build_user_prompt(test_points)
+        user_prompt = self._build_user_prompt(test_points, project_context)
         raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         data = self._extract_json(raw)
         cases = data.get("test_cases")
@@ -41,6 +44,12 @@ class TestCaseAgent(BaseAgent):
             raise ValueError("模型输出缺少 test_cases 字段")
         return data
 
-    def _build_user_prompt(self, test_points: list[dict]) -> str:
+    def _build_user_prompt(
+        self, test_points: list[dict], project_context: str = ""
+    ) -> str:
         points_json = json.dumps(test_points, ensure_ascii=False)
-        return f"测试点列表：\n```json\n{points_json}\n```"
+        parts = []
+        if project_context:
+            parts.append(f"被测系统信息：\n{project_context}")
+        parts.append(f"测试点列表：\n```json\n{points_json}\n```")
+        return "\n\n".join(parts)

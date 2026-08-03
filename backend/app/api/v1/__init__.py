@@ -8,6 +8,7 @@ from app.api.v1 import (
     health,
     projects,
     requirements,
+    systems,
     system,
     test_cases,
     test_points,
@@ -24,5 +25,6 @@ api_router.include_router(requirements.router)
 api_router.include_router(test_points.router)
 api_router.include_router(test_cases.router)
 api_router.include_router(chat.router)
+api_router.include_router(systems.router)
 api_router.include_router(system.router)
 api_router.include_router(dashboard.router)

@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session
 from app.agents.llm import get_llm_provider
 from app.agents.testpoint_agent import TestPointAgent
 from app.models.module import Module
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.test_point import TestPoint
 from app.schemas.testpoint import TestPointOut
 from app.services.ai_log_service import log_ai_call
 from app.services.system_settings_service import get_setting
+from app.services.sut_service import build_project_context
 
 # 类别归一化映射：兼容模型输出的中英文写法
 CATEGORY_MAP = {
@@ -50,12 +52,16 @@ def run_testpoint_generation(
     functions = _collect_functions(requirement, modules)
 
     content = requirement.content or ""
+    project = db.get(Project, requirement.project_id)
+    project_context = build_project_context(project) if project else ""
     prompt_length = len(json.dumps(functions, ensure_ascii=False)) + len(content)
     start = time.monotonic()
     try:
         agent = TestPointAgent(get_llm_provider(db))
         system_prompt = get_setting(db, "prompt_testpoint")
-        result = agent.generate(functions, content, requirement.file_name, system_prompt)
+        result = agent.generate(
+            functions, content, requirement.file_name, system_prompt, project_context
+        )
         points = result.get("test_points", [])
         duration_ms = int((time.monotonic() - start) * 1000)
         log_ai_call(

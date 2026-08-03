@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     DEEPSEEK_MODEL: str = "deepseek-chat"
     AI_MAX_CONTENT_LENGTH: int = 30000  # 传入模型的文档文本上限（字符）
 
+    # 敏感信息加密（测试密码等）：留空时由 SECRET_KEY 派生
+    FERNET_KEY: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

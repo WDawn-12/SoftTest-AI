@@ -8,9 +8,11 @@ from app.agents.chat_agent import ChatAgent
 from app.agents.llm import get_llm_provider
 from app.models.chat_history import ChatHistory
 from app.models.requirement import Requirement
+from app.models.project import Project
 from app.models.test_case import TestCase
 from app.services.ai_log_service import log_ai_call
 from app.services.system_settings_service import get_setting
+from app.services.sut_service import build_project_context
 
 HISTORY_LIMIT = 10  # 注入对话上下文的最近消息条数
 KNOWLEDGE_LIMIT = 8000  # 项目知识库文本上限
@@ -19,6 +21,13 @@ KNOWLEDGE_LIMIT = 8000  # 项目知识库文本上限
 def build_project_knowledge(db: Session, project_id: int) -> str:
     """汇总项目需求解析结果与测试用例，作为问答知识库。"""
     parts: list[str] = []
+
+    # 被测系统上下文
+    project = db.get(Project, project_id)
+    if project:
+        context = build_project_context(project)
+        if context:
+            parts.append(f"被测系统信息：\n{context}")
 
     requirements = (
         db.query(Requirement)
