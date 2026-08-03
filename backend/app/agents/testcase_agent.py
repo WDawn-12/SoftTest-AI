@@ -14,6 +14,7 @@ SYSTEM_PROMPT = """你是一名资深的软件测试用例设计专家。根据�
       "module": "所属模块名",
       "title": "功能名称",
       "test_point": "对应测试点内容",
+      "test_data": "测试数据（具体输入值）",
       "priority": "高/中/低",
       "preconditions": "前置条件",
       "steps": ["步骤1（含测试数据）", "步骤2", "步骤3"],
@@ -22,7 +23,7 @@ SYSTEM_PROMPT = """你是一名资深的软件测试用例设计专家。根据�
     }
   ]
 }
-要求：每个测试点对应一条用例；steps 至少 3 步且包含具体测试数据。"""
+要求：每个测试点对应一条用例；test_data 给出具体输入值；steps 至少 3 步。"""
 
 
 class TestCaseAgent(BaseAgent):

@@ -51,3 +51,19 @@ export function deleteTestCaseApi(projectId: number, id: number): Promise<void> 
     `/v1/projects/${projectId}/test-cases/${id}`,
   ) as unknown as Promise<void>
 }
+
+// 批量导出测试用例 Excel（按筛选条件）
+export function exportTestCasesApi(
+  projectId: number,
+  params: {
+    requirement_id?: number
+    module_id?: number
+    priority?: string
+    keyword?: string
+  },
+): Promise<Blob> {
+  return request.get(`/v1/projects/${projectId}/test-cases/export`, {
+    params,
+    responseType: 'blob',
+  }) as unknown as Promise<Blob>
+}

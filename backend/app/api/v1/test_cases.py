@@ -1,17 +1,108 @@
 """测试用例管理接口：列表、编辑、删除。"""
+import urllib.parse
+from datetime import date
+from io import BytesIO
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Query as SAQuery
 
 from app.api.deps import DbDep, get_current_user, get_owned_project
+from app.models.module import Module
 from app.models.test_case import TestCase
 from app.models.user import User
 from app.schemas.testcase import TestCaseListOut, TestCaseOut, TestCaseUpdate
+from app.services.excel_export import EXPORT_HEADERS, build_testcase_excel
 from app.services.testcase_service import build_testcase_out
 
 router = APIRouter(prefix="/projects/{project_id}/test-cases", tags=["测试用例管理"])
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _apply_filters(
+    query: SAQuery,
+    requirement_id: int | None,
+    module_id: int | None,
+    priority: str | None,
+    keyword: str | None,
+) -> SAQuery:
+    """复用列表筛选条件。"""
+    if requirement_id:
+        query = query.filter(TestCase.requirement_id == requirement_id)
+    if module_id:
+        query = query.filter(TestCase.module_id == module_id)
+    if priority:
+        query = query.filter(TestCase.priority == priority)
+    if keyword:
+        query = query.filter(
+            TestCase.case_no.like(f"%{keyword}%")
+            | TestCase.title.like(f"%{keyword}%")
+            | TestCase.test_point.like(f"%{keyword}%")
+        )
+    return query
+
+
+@router.get("/export", summary="导出测试用例 Excel（批量）")
+def export_test_cases(
+    project_id: int,
+    requirement_id: int | None = Query(default=None, description="按需求筛选"),
+    module_id: int | None = Query(default=None, description="按模块筛选"),
+    priority: str | None = Query(default=None, description="按优先级筛选"),
+    keyword: str | None = Query(default=None, max_length=100, description="关键字"),
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """按当前筛选条件批量导出测试用例为 Excel 文件。"""
+    project = get_owned_project(db, project_id, current_user)
+    query = _apply_filters(
+        db.query(TestCase).filter(TestCase.project_id == project_id),
+        requirement_id,
+        module_id,
+        priority,
+        keyword,
+    )
+    cases = query.order_by(TestCase.case_no.asc()).all()
+
+    # 组装模块名
+    module_ids = {c.module_id for c in cases if c.module_id}
+    module_names: dict[int, str] = {}
+    if module_ids:
+        rows = db.query(Module.id, Module.name).filter(Module.id.in_(module_ids)).all()
+        module_names = {mid: name for mid, name in rows}
+
+    data_rows = [
+        [
+            c.case_no,
+            c.priority,
+            module_names.get(c.module_id, "") if c.module_id else "",
+            c.title,
+            c.test_point or "",
+            c.preconditions or "",
+            c.steps or "",
+            c.test_data or "",
+            c.expected_result or "",
+            c.remark or "",
+        ]
+        for c in cases
+    ]
+
+    content = build_testcase_excel(data_rows)
+    filename = f"测试用例_{project.name}_{date.today().isoformat()}.xlsx"
+    # RFC 5987 编码中文文件名
+    encoded_filename = urllib.parse.quote(filename)
+    return StreamingResponse(
+        BytesIO(content),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename=testcases.xlsx; filename*=UTF-8''{encoded_filename}"
+            )
+        },
+    )
 
 
 @router.get("", response_model=TestCaseListOut, summary="测试用例列表")
@@ -28,19 +119,13 @@ def list_test_cases(
 ) -> TestCaseListOut:
     """分页查询项目下的测试用例，支持多条件筛选。"""
     get_owned_project(db, project_id, current_user)
-    query = db.query(TestCase).filter(TestCase.project_id == project_id)
-    if requirement_id:
-        query = query.filter(TestCase.requirement_id == requirement_id)
-    if module_id:
-        query = query.filter(TestCase.module_id == module_id)
-    if priority:
-        query = query.filter(TestCase.priority == priority)
-    if keyword:
-        query = query.filter(
-            TestCase.case_no.like(f"%{keyword}%")
-            | TestCase.title.like(f"%{keyword}%")
-            | TestCase.test_point.like(f"%{keyword}%")
-        )
+    query = _apply_filters(
+        db.query(TestCase).filter(TestCase.project_id == project_id),
+        requirement_id,
+        module_id,
+        priority,
+        keyword,
+    )
 
     total = query.count()
     rows = (

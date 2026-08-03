@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS `test_cases` (
   `case_no`         VARCHAR(50)  NOT NULL COMMENT '用例编号',
   `title`           VARCHAR(200) NOT NULL COMMENT '功能名称',
   `test_point`      VARCHAR(500) DEFAULT NULL COMMENT '测试点',
+  `test_data`       VARCHAR(500) DEFAULT NULL COMMENT '测试数据',
   `priority`        VARCHAR(20)  NOT NULL DEFAULT '中' COMMENT '优先级：高/中/低',
   `preconditions`   TEXT         DEFAULT NULL COMMENT '前置条件',
   `steps`           TEXT         DEFAULT NULL COMMENT '测试步骤',

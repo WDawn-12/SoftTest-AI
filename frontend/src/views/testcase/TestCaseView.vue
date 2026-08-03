@@ -70,6 +70,14 @@
           </template>
         </el-input>
         <el-button type="primary" @click="handleSearch">搜索</el-button>
+        <el-button
+          type="success"
+          :disabled="!projectId"
+          :loading="exporting"
+          @click="handleExport"
+        >
+          导出 Excel
+        </el-button>
       </div>
     </el-card>
 
@@ -138,6 +146,9 @@
         <el-form-item label="测试点" prop="test_point">
           <el-input v-model="editForm.test_point" maxlength="500" />
         </el-form-item>
+        <el-form-item label="测试数据" prop="test_data">
+          <el-input v-model="editForm.test_data" maxlength="500" />
+        </el-form-item>
         <el-form-item label="优先级" prop="priority">
           <el-select v-model="editForm.priority" style="width: 100%">
             <el-option label="高" value="高" />
@@ -179,6 +190,7 @@ import { listProjectsApi } from '@/api/project'
 import { listRequirementsApi } from '@/api/requirement'
 import {
   deleteTestCaseApi,
+  exportTestCasesApi,
   generateTestCasesApi,
   listTestCasesApi,
   updateTestCaseApi,
@@ -197,6 +209,7 @@ const keyword = ref('')
 const loading = ref(false)
 const generating = ref(false)
 const saving = ref(false)
+const exporting = ref(false)
 const items = ref<TestCase[]>([])
 const total = ref(0)
 const query = reactive({ page: 1, page_size: 10 })
@@ -281,6 +294,7 @@ const editForm = reactive({
   case_no: '',
   title: '',
   test_point: '',
+  test_data: '',
   priority: '中' as TestCasePriority,
   preconditions: '',
   steps: '',
@@ -297,6 +311,7 @@ function openEdit(row: TestCase) {
   editForm.case_no = row.case_no
   editForm.title = row.title
   editForm.test_point = row.test_point || ''
+  editForm.test_data = row.test_data || ''
   editForm.priority = row.priority as TestCasePriority
   editForm.preconditions = row.preconditions || ''
   editForm.steps = row.steps || ''
@@ -314,6 +329,7 @@ async function handleUpdate() {
     await updateTestCaseApi(projectId.value, editForm.id, {
       title: editForm.title,
       test_point: editForm.test_point || undefined,
+      test_data: editForm.test_data || undefined,
       priority: editForm.priority,
       preconditions: editForm.preconditions || undefined,
       steps: editForm.steps || undefined,
@@ -325,6 +341,31 @@ async function handleUpdate() {
     loadList()
   } finally {
     saving.value = false
+  }
+}
+
+// 导出 Excel（按当前筛选批量导出）
+async function handleExport() {
+  if (!projectId.value) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  exporting.value = true
+  try {
+    const blob = await exportTestCasesApi(projectId.value, {
+      requirement_id: requirementId.value || undefined,
+      priority: priority.value || undefined,
+      keyword: keyword.value || undefined,
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `测试用例_${new Date().toISOString().slice(0, 10)}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } finally {
+    exporting.value = false
   }
 }
 

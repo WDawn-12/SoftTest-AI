@@ -41,6 +41,9 @@ class TestCase(Base, TimestampMixin):
     test_point: Mapped[str | None] = mapped_column(
         String(500), comment="测试点"
     )
+    test_data: Mapped[str | None] = mapped_column(
+        String(500), comment="测试数据"
+    )
     priority: Mapped[str] = mapped_column(
         String(20), default="中", comment="优先级：高/中/低"
     )

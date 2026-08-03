@@ -20,6 +20,7 @@ class TestCaseOut(BaseModel):
     case_no: str
     title: str
     test_point: str | None
+    test_data: str | None
     priority: str
     preconditions: str | None
     steps: str | None
@@ -44,6 +45,7 @@ class TestCaseUpdate(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=200, description="功能名称")
     test_point: str | None = Field(default=None, max_length=500, description="测试点")
+    test_data: str | None = Field(default=None, max_length=500, description="测试数据")
     priority: Priority | None = Field(default=None, description="优先级")
     preconditions: str | None = Field(default=None, description="前置条件")
     steps: str | None = Field(default=None, description="测试步骤（每行一步）")

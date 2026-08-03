@@ -10,6 +10,7 @@ export interface TestCase {
   case_no: string
   title: string
   test_point: string | null
+  test_data: string | null
   priority: string
   preconditions: string | null
   steps: string | null
@@ -30,6 +31,7 @@ export interface TestCaseListResult {
 export interface TestCaseUpdatePayload {
   title?: string
   test_point?: string
+  test_data?: string
   priority?: TestCasePriority
   preconditions?: string
   steps?: string
