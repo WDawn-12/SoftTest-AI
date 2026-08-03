@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"  # 上传文件保存目录（相对后端运行目录）
     MAX_UPLOAD_SIZE: int = 20 * 1024 * 1024  # 单文件大小上限：20MB
 
+    # AI 大模型配置（第五阶段 AI Agent 使用）
+    AI_PROVIDER: str = "demo"  # 可选：openai / deepseek / demo（演示模式无需密钥）
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com/v1"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    AI_MAX_CONTENT_LENGTH: int = 30000  # 传入模型的文档文本上限（字符）
+
 
 @lru_cache
 def get_settings() -> Settings:

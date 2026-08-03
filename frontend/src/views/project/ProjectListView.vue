@@ -45,7 +45,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="170" />
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button
               link
@@ -53,6 +53,13 @@
               @click="router.push(`/projects/${row.id}/requirement/upload`)"
             >
               上传需求
+            </el-button>
+            <el-button
+              link
+              type="primary"
+              @click="router.push(`/projects/${row.id}/requirement/result`)"
+            >
+              解析结果
             </el-button>
             <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
             <el-popconfirm

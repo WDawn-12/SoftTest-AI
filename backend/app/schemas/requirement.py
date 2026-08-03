@@ -33,3 +33,12 @@ class RequirementListOut(BaseModel):
     page: int
     page_size: int
     items: list[RequirementOut]
+
+
+class ParseResultOut(BaseModel):
+    """AI 解析结果响应。"""
+
+    requirement_id: int
+    parse_status: str
+    error_message: str | None
+    result: dict | None

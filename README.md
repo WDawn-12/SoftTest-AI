@@ -54,7 +54,7 @@ graph LR
 | 项目管理 | 项目 CRUD（分页、搜索） | ✅ 已完成 |
 | 新建项目 | 创建项目表单 | ✅ 已完成 |
 | 上传需求文档 | 上传 Word / PDF / TXT / Markdown，提取文本 | ✅ 已完成 |
-| AI 解析结果 | 展示功能模块提取结果 | 第五阶段 |
+| AI 解析结果 | Requirement Agent 解析：模块、功能点、角色、流程、风险 | ✅ 已完成 |
 | 测试点管理 | AI 生成测试点 + 人工编辑 | 第六阶段 |
 | 测试用例管理 | AI 生成测试用例 + 人工编辑 | 第七阶段 |
 | AI 聊天助手 | 与 AI Agent 对话 | 第九阶段 |
@@ -223,6 +223,8 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id}/requirements | 需求文档列表（分页） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/requirements/{id} | 需求文档详情（含文本内容） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/requirements/{id} | 删除需求文档 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/{id}/parse | 调用 Requirement Agent 解析需求 | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/requirements/{id}/parse-result | 获取 AI 解析结果 | 创建人/管理员 |
 
 ## 10. Excel 导出格式
 
@@ -233,13 +235,27 @@ pnpm build   # 产物输出到 dist/
 
 该格式与 `test_cases` 表字段一一对应。
 
+## 10.1 AI Agent 设计
+
+系统采用三个相互独立的 AI Agent，由统一的 LLM 供应商层驱动（LangChain + OpenAI 兼容协议），可在 OpenAI 与 DeepSeek 之间切换：
+
+| 配置项 | 说明 |
+| --- | --- |
+| `AI_PROVIDER` | `openai` / `deepseek` / `demo`（演示模式无需 API Key） |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | OpenAI 接入配置 |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` / `DEEPSEEK_MODEL` | DeepSeek 接入配置 |
+
+**Requirement Agent（已完成）**：读取需求文档文本，输出结构化 JSON（需求概述、功能模块、功能点、用户角色、业务流程、风险点），解析结果保存至 `requirements.parse_result`，并同步功能模块到 `modules` 表。切换方式：修改 `backend/.env` 中的 `AI_PROVIDER` 并配置对应密钥。
+
+TestPoint Agent 与 TestCase Agent 将在后续阶段实现。
+
 ## 11. 开发路线图
 
 - [x] 第一阶段：搭建项目（目录、前后端初始化、Docker、数据库、README）
 - [x] 第二阶段：登录（JWT 认证、用户管理）
 - [x] 第三阶段：项目管理
 - [x] 第四阶段：上传需求文档
-- [ ] 第五阶段：AI 解析需求
+- [x] 第五阶段：AI 解析需求
 - [ ] 第六阶段：测试点生成
 - [ ] 第七阶段：测试用例生成
 - [ ] 第八阶段：Excel 导出

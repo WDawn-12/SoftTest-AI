@@ -1,6 +1,7 @@
 // 需求文档相关 API
 import request from '@/utils/request'
 import type {
+  ParseResultResponse,
   Requirement,
   RequirementDetail,
   RequirementListResult,
@@ -46,4 +47,24 @@ export function deleteRequirementApi(
   return request.delete(
     `/v1/projects/${projectId}/requirements/${id}`,
   ) as unknown as Promise<void>
+}
+
+// 调用 Requirement Agent 解析需求
+export function parseRequirementApi(
+  projectId: number,
+  id: number,
+): Promise<ParseResultResponse> {
+  return request.post(
+    `/v1/projects/${projectId}/requirements/${id}/parse`,
+  ) as unknown as Promise<ParseResultResponse>
+}
+
+// 获取 AI 解析结果
+export function getParseResultApi(
+  projectId: number,
+  id: number,
+): Promise<ParseResultResponse> {
+  return request.get(
+    `/v1/projects/${projectId}/requirements/${id}/parse-result`,
+  ) as unknown as Promise<ParseResultResponse>
 }

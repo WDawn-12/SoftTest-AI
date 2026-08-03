@@ -1,0 +1,53 @@
+"""需求解析业务逻辑：调用 Requirement Agent 并保存解析结果。"""
+import json
+
+from sqlalchemy.orm import Session
+
+from app.agents.llm import get_llm_provider
+from app.agents.requirement_agent import RequirementAgent
+from app.core.config import settings
+from app.models.module import Module
+from app.models.requirement import Requirement
+
+
+def run_requirement_parse(db: Session, requirement: Requirement) -> Requirement:
+    """调用 Requirement Agent 解析需求，保存结构化结果并同步功能模块。"""
+    if not requirement.content:
+        requirement.parse_status = "failed"
+        requirement.error_message = "需求文档未提取到文本内容，无法解析"
+        db.commit()
+        db.refresh(requirement)
+        return requirement
+
+    try:
+        provider = get_llm_provider()
+        agent = RequirementAgent(provider)
+        content = requirement.content[: settings.AI_MAX_CONTENT_LENGTH]
+        result = agent.parse(content, requirement.file_name)
+    except Exception as exc:  # 模型调用/密钥配置/输出解析失败
+        requirement.parse_status = "failed"
+        requirement.error_message = f"解析失败：{exc}"
+        db.commit()
+        db.refresh(requirement)
+        return requirement
+
+    # 保存结构化解析结果
+    requirement.parse_status = "completed"
+    requirement.parse_result = json.dumps(result, ensure_ascii=False)
+    requirement.error_message = None
+
+    # 同步功能模块到 modules 表（先清旧后写新，支持重复解析）
+    db.query(Module).filter(Module.requirement_id == requirement.id).delete()
+    for index, module_data in enumerate(result.get("modules", [])):
+        db.add(
+            Module(
+                project_id=requirement.project_id,
+                requirement_id=requirement.id,
+                name=str(module_data.get("name", ""))[:100],
+                description=module_data.get("description"),
+                sort_order=index,
+            )
+        )
+    db.commit()
+    db.refresh(requirement)
+    return requirement

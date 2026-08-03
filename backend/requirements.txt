@@ -27,3 +27,6 @@ pyjwt==2.10.1
 # 文档解析（第四阶段使用）
 python-docx==1.1.2
 pdfplumber==0.11.6
+
+# LangChain + OpenAI（第五阶段 AI Agent 使用）
+langchain-openai==1.4.1
