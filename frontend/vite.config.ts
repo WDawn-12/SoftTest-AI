@@ -21,4 +21,27 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // 第三方库分包，减少首屏加载体积
+    rollupOptions: {
+      output: {
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('element-plus') || id.includes('@element-plus')) {
+            return 'element-plus'
+          }
+          if (id.includes('vue') || id.includes('pinia')) {
+            return 'vue-vendor'
+          }
+          if (id.includes('axios')) {
+            return 'axios'
+          }
+          if (id.includes('marked') || id.includes('dompurify')) {
+            return 'markdown'
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 1000,
+  },
 })

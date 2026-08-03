@@ -87,7 +87,9 @@ AITestAgent/
 │   ├── nginx.conf
 │   └── .env.development
 ├── docs/
-│   └── sql/init.sql            # 数据库初始化脚本
+│   ├── sql/init.sql            # 数据库初始化脚本（10 张表）
+│   ├── examples/               # 示例需求文档、示例测试点、示例测试用例 Excel
+│   └── 测试报告.md             # 系统测试报告
 ├── docker-compose.yml          # 一键编排：MySQL + 后端 + 前端
 ├── .env.example
 └── README.md
@@ -115,7 +117,10 @@ docker compose up -d --build
 
 默认管理员账号：`admin` / `admin123`（登录功能上线后请立即修改）。
 
-> 注意：MySQL 数据保存在 Docker 卷 `mysql_data` 中，数据库初始化脚本仅在首次启动时自动执行。
+> 注意：
+> - MySQL 数据保存在 Docker 卷 `mysql_data` 中，数据库初始化脚本仅在首次启动时自动执行；
+> - 宿主机 MySQL 端口默认映射为 **3307**（可用 `MYSQL_PORT` 覆盖），避免与本机已安装的 MySQL 3306 冲突；
+> - 若宿主机 80 端口被占用，可修改 compose 中前端端口映射。
 
 ## 7. 本地开发
 
@@ -287,8 +292,12 @@ pnpm build   # 产物输出到 dist/
 - [x] 第八阶段：Excel 导出
 - [x] 第九阶段：AI 聊天
 - [x] 第十阶段：系统优化
-- [ ] 第十一阶段：Docker 部署
-- [ ] 第十二阶段：答辩准备
+- [x] 第十一阶段：Docker 部署与收尾
+- [x] 第十二阶段：答辩准备（测试报告、示例数据）
+
+## 13. 系统测试
+
+完整的系统测试结果见 [docs/测试报告.md](docs/测试报告.md)：覆盖全部功能模块的端到端接口测试、前端构建验证与数据库初始化验证。
 
 ## 12. 环境要求
 

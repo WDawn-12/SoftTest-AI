@@ -21,7 +21,7 @@ service.interceptors.request.use((config) => {
 // 响应拦截器：统一处理业务响应与错误提示
 service.interceptors.response.use(
   (response: AxiosResponse) => response.data,
-  (error) => {
+  async (error) => {
     // 登录失效（401）：清除本地凭证并回到登录页
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
@@ -30,7 +30,19 @@ service.interceptors.response.use(
         window.location.href = '/login'
       }
     }
-    const message = error.response?.data?.detail || error.message || '请求失败'
+    let message = error.response?.data?.detail || error.message || '请求失败'
+    // 二进制响应（如 Excel 导出）出错时，从 Blob 中解析后端错误信息
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text()
+        const parsed = JSON.parse(text)
+        if (parsed?.detail) {
+          message = parsed.detail
+        }
+      } catch {
+        // 非 JSON 错误内容，保留默认提示
+      }
+    }
     ElMessage.error(message)
     return Promise.reject(error)
   },
