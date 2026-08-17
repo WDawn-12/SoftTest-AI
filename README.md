@@ -1,7 +1,5 @@
 # AITestAgent —— 基于 AI Agent 的软件测试辅助平台
 
-> 毕业设计项目：通过 AI Agent 自动完成「需求解析 → 测试点生成 → 测试用例生成」的软件测试辅助流程。
-
 ## 1. 项目简介
 
 本平台面向软件测试人员，实现以下核心流程：
@@ -91,7 +89,7 @@ AITestAgent/
 ├── docs/
 │   ├── sql/init.sql            # 数据库初始化脚本（10 张表）
 │   ├── examples/               # 示例需求文档、示例测试点、示例测试用例 Excel
-│   └── 测试报告.md             # 系统测试报告
+│   └── system-test-report.md  # 系统测试报告
 ├── docker-compose.yml          # 一键编排：MySQL + 后端 + 前端
 ├── .env.example
 └── README.md
@@ -305,13 +303,12 @@ pnpm build   # 产物输出到 dist/
 - [x] 第九阶段：AI 聊天
 - [x] 第十阶段：系统优化
 - [x] 第十一阶段：Docker 部署与收尾
-- [x] 第十二阶段：答辩准备（测试报告、示例数据）
 - [x] 扩展功能：被测系统管理（SUT）
 - [x] 扩展功能：Test Data Generator（测试数据生成器）
 
 ## 13. 系统测试
 
-完整的系统测试结果见 [docs/测试报告.md](docs/测试报告.md)：覆盖全部功能模块的端到端接口测试、前端构建验证与数据库初始化验证。
+完整的系统测试结果见 [docs/system-test-report.md](docs/system-test-report.md)：覆盖全部功能模块的端到端接口测试、前端构建验证与数据库初始化验证。
 
 ## 12. 环境要求
 
