@@ -328,6 +328,28 @@ def test_export_interface_cases_jmeter(client, user_headers):
     assert "HTTPSampler.postBodyRaw" in text
     assert 'testclass="ResponseAssertion"' in text
     assert "Assertion.response_code" in text
+    # 防回归：所有 guiclass 必须为 JMeter 官方可识别的值
+    # （UserDefinedVariablesGui 是内部类名，写进 jmx 会导致 clearGui() 空指针）
+    import re as _re
+
+    guiclasses = set(
+        _re.findall(r'guiclass="([^"]+)"', text)
+    )
+    assert "UserDefinedVariablesGui" not in guiclasses
+    # 用户自定义变量用官方 ArgumentsPanel
+    assert 'guiclass="ArgumentsPanel"' in text
+    # 其余 guiclass 必须在官方白名单内
+    official_guiclasses = {
+        "TestPlanGui", "ArgumentsPanel", "LoopControlPanel", "ThreadGroupGui",
+        "HttpTestSampleGui", "HTTPArgumentsPanel", "AssertionGui",
+        "ViewResultsFullVisualizer", "StatVisualizer",
+    }
+    unknown = guiclasses - official_guiclasses
+    assert not unknown, f"存在非官方 guiclass: {unknown}"
+    # 官方字段完整性（JMeter 5.x 标准导出均包含）
+    assert "TestPlan.user_define_classpath" in text
+    assert "ThreadGroup.same_user_on_next_iteration" in text
+    assert "HTTPSampler.response_timeout" in text
 
 
 def test_interface_permission_isolation(client):

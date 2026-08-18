@@ -366,9 +366,11 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
     ramp_time = 5  # 启动时间（秒）
 
     # 用户自定义变量：base_url（导入后在 jmeter.properties 或此处改为真实地址）
+    # 注意：guiclass 必须用 ArgumentsPanel（UserDefinedVariablesGui 是内部类名，
+    # 写进 jmx 会导致 JMeter 加载时 getGui() 返回 null → clearGui() 空指针）
     variables = _jmx_element(
         "Arguments",
-        "UserDefinedVariablesGui",
+        "ArgumentsPanel",
         "用户自定义变量",
         (
             '<collectionProp name="Arguments.arguments">'
@@ -474,6 +476,9 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
                 '<boolProp name="HTTPSampler.autoRedirects">false</boolProp>'
                 '<boolProp name="HTTPSampler.useKeepAlive">true</boolProp>'
                 '<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>'
+                '<stringProp name="HTTPSampler.embedded_url_re"></stringProp>'
+                '<stringProp name="HTTPSampler.connect_timeout"></stringProp>'
+                '<stringProp name="HTTPSampler.response_timeout"></stringProp>'
                 '{arguments}'
                 '{body_raw}'
             ).format(
@@ -552,6 +557,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             '<boolProp name="ThreadGroup.scheduler">false</boolProp>'
             '<stringProp name="ThreadGroup.duration"></stringProp>'
             '<stringProp name="ThreadGroup.delay"></stringProp>'
+            '<boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>'
         ),
     )
 
@@ -574,6 +580,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             "</elementProp>"
             "</collectionProp>"
             "</elementProp>"
+            '<stringProp name="TestPlan.user_define_classpath"></stringProp>'
         ),
     )
 
@@ -584,7 +591,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
     listener_tree = "".join(f"{l}<hashTree/>" for l in listeners)
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
-        '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">'
+        '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">'
         "<hashTree>"
         f"{test_plan}"
         "<hashTree>"
