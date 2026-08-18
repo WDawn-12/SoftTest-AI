@@ -1,11 +1,19 @@
 """大模型调用层：OpenAI / DeepSeek（OpenAI 兼容协议）与本地演示模式。"""
 import json
 import re
+import time
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+
+
+def _chunk_text(text: str, size: int = 16) -> Iterator[str]:
+    """按固定长度切分文本为若干块（模拟流式输出）。"""
+    for i in range(0, len(text), size):
+        yield text[i : i + size]
 
 
 class LLMProvider(ABC):
@@ -17,6 +25,15 @@ class LLMProvider(ABC):
     def chat(self, system_prompt: str, user_prompt: str) -> str:
         """发送对话请求，返回模型回复文本。"""
         raise NotImplementedError
+
+    def stream_chat(self, system_prompt: str, user_prompt: str) -> Iterator[str]:
+        """流式发送对话请求，逐块产出回复文本。
+
+        默认实现：调用 chat() 获取完整回复后分块产出；
+        子类（如 OpenAI 兼容协议）可覆盖为真正的逐 token 流式。
+        """
+        content = self.chat(system_prompt, user_prompt)
+        yield from _chunk_text(content)
 
 
 class OpenAILikeProvider(LLMProvider):
@@ -44,6 +61,26 @@ class OpenAILikeProvider(LLMProvider):
         )
         return str(response.content).strip()
 
+    def stream_chat(self, system_prompt: str, user_prompt: str) -> Iterator[str]:
+        """使用 OpenAI 兼容接口的流式模式逐 token 产出回复。"""
+        from langchain_core.messages import HumanMessage, SystemMessage
+        from langchain_openai import ChatOpenAI
+
+        llm = ChatOpenAI(
+            model=self._model,
+            api_key=self._api_key,
+            base_url=self._base_url,
+            temperature=0.2,
+            timeout=120,
+            streaming=True,
+        )
+        for chunk in llm.stream(
+            [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+        ):
+            piece = getattr(chunk, "content", "")
+            if piece:
+                yield str(piece)
+
 
 class DemoProvider(LLMProvider):
     """演示供应商：未配置 API Key 时使用，返回固定结构的示例解析结果。"""
@@ -67,6 +104,13 @@ class DemoProvider(LLMProvider):
         if "对话内容：" in user_prompt:
             return self._chat_demo(user_prompt)
         return self._requirement_demo(user_prompt)
+
+    def stream_chat(self, system_prompt: str, user_prompt: str) -> Iterator[str]:
+        """演示供应商流式输出：完整回复按块产出，块间小延迟模拟打字机效果。"""
+        content = self.chat(system_prompt, user_prompt)
+        for piece in _chunk_text(content, size=8):
+            yield piece
+            time.sleep(0.01)
 
     def _extract_functions(self, user_prompt: str) -> list[dict] | None:
         """从用户提示中提取功能点 JSON（TestPoint Agent 专用）。"""

@@ -1,5 +1,6 @@
 // 需求文档相关 API
 import request from '@/utils/request'
+import { fetchSSE, type SSEHandlers } from '@/utils/sse'
 import type {
   ParseResultResponse,
   Requirement,
@@ -57,6 +58,21 @@ export function parseRequirementApi(
   return request.post(
     `/v1/projects/${projectId}/requirements/${id}/parse`,
   ) as unknown as Promise<ParseResultResponse>
+}
+
+// 调用 Requirement Agent 解析需求（SSE 流式：阶段进度 + 最终结果）
+// 事件：status（阶段进度）/ result（解析结果）/ error
+export function parseRequirementStreamApi(
+  projectId: number,
+  id: number,
+  handlers: SSEHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return fetchSSE(
+    `/v1/projects/${projectId}/requirements/${id}/parse/stream`,
+    { method: 'POST', signal },
+    handlers,
+  )
 }
 
 // 获取 AI 解析结果

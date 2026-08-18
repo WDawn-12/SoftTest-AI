@@ -44,6 +44,16 @@
         </el-button>
       </div>
 
+      <!-- AI 生成进度 -->
+      <el-alert
+        v-if="generating"
+        type="info"
+        :closable="false"
+        :title="generateProgress"
+        show-icon
+        style="margin-top: 12px"
+      />
+
       <!-- 筛选 -->
       <div class="toolbar" style="margin-top: 10px">
         <el-select
@@ -164,7 +174,7 @@ import { listProjectsApi } from '@/api/project'
 import { listRequirementsApi } from '@/api/requirement'
 import {
   deleteTestPointApi,
-  generateTestPointsApi,
+  generateTestPointsStreamApi,
   listTestPointsApi,
   updateTestPointApi,
 } from '@/api/testpoint'
@@ -185,6 +195,7 @@ const saving = ref(false)
 const items = ref<TestPoint[]>([])
 const total = ref(0)
 const query = reactive({ page: 1, page_size: 10 })
+const generateProgress = ref('正在调用 TestPoint Agent 生成测试点...')
 
 // 类别展示映射
 const categoryMeta: Record<
@@ -254,9 +265,26 @@ async function handleGenerate() {
     return
   }
   generating.value = true
+  generateProgress.value = '正在调用 TestPoint Agent 按五类维度生成测试点...'
   try {
-    const created = await generateTestPointsApi(projectId.value, requirementId.value)
-    ElMessage.success(`已生成 ${created.length} 条测试点`)
+    await generateTestPointsStreamApi(
+      projectId.value,
+      requirementId.value,
+      {
+        onEvent(event, data) {
+          if (event === 'status') {
+            const stage = data as { message?: string }
+            if (stage?.message) generateProgress.value = stage.message
+          } else if (event === 'result') {
+            const created = data as TestPoint[]
+            ElMessage.success(`已生成 ${created.length} 条测试点`)
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || '测试点生成失败，请重试')
+        },
+      },
+    )
     loadList()
   } finally {
     generating.value = false

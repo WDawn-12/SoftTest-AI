@@ -1,5 +1,6 @@
 // 测试点相关 API
 import request from '@/utils/request'
+import { fetchSSE, type SSEHandlers } from '@/utils/sse'
 import type {
   TestPoint,
   TestPointListResult,
@@ -31,6 +32,21 @@ export function generateTestPointsApi(
   return request.post(
     `/v1/projects/${projectId}/requirements/${requirementId}/test-points/generate`,
   ) as unknown as Promise<TestPoint[]>
+}
+
+// 调用 TestPoint Agent 生成测试点（SSE 流式：阶段进度 + 测试点列表）
+// 事件：status（阶段进度）/ result（测试点列表）/ error
+export function generateTestPointsStreamApi(
+  projectId: number,
+  requirementId: number,
+  handlers: SSEHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return fetchSSE(
+    `/v1/projects/${projectId}/requirements/${requirementId}/test-points/generate/stream`,
+    { method: 'POST', signal },
+    handlers,
+  )
 }
 
 // 编辑测试点（人工编辑）

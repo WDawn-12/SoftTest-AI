@@ -46,7 +46,15 @@
       </div>
 
       <el-alert
-        v-if="parseResult && parseResult.parse_status !== 'completed'"
+        v-if="parsing"
+        type="info"
+        :closable="false"
+        :title="parseProgress"
+        show-icon
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-else-if="parseResult && parseResult.parse_status !== 'completed'"
         :type="parseResult.parse_status === 'failed' ? 'error' : 'info'"
         :closable="false"
         :title="
@@ -165,7 +173,7 @@ import { getProjectApi } from '@/api/project'
 import {
   getParseResultApi,
   listRequirementsApi,
-  parseRequirementApi,
+  parseRequirementStreamApi,
 } from '@/api/requirement'
 import type { ParseResultResponse, Requirement } from '@/types/requirement'
 
@@ -178,6 +186,7 @@ const requirements = ref<Requirement[]>([])
 const selectedId = ref<number | null>(null)
 const loading = ref(false)
 const parsing = ref(false)
+const parseProgress = ref('正在调用 AI 解析需求...')
 const parseResult = ref<ParseResultResponse | null>(null)
 
 async function loadProject() {
@@ -208,10 +217,29 @@ async function loadParseResult() {
 async function handleParse() {
   if (!selectedId.value) return
   parsing.value = true
+  parseProgress.value = '正在调用 Requirement Agent 解析需求文档...'
   try {
-    parseResult.value = await parseRequirementApi(projectId, selectedId.value)
-    ElMessage.success(
-      parseResult.value.parse_status === 'completed' ? '解析完成' : '解析未成功，请查看提示',
+    await parseRequirementStreamApi(
+      projectId,
+      selectedId.value,
+      {
+        onEvent(event, data) {
+          if (event === 'status') {
+            const stage = data as { stage?: string; message?: string }
+            if (stage?.message) parseProgress.value = stage.message
+          } else if (event === 'result') {
+            parseResult.value = data as ParseResultResponse
+            ElMessage.success(
+              (data as { parse_status?: string }).parse_status === 'completed'
+                ? '解析完成'
+                : '解析未成功，请查看提示',
+            )
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || '解析失败，请重试')
+        },
+      },
     )
   } finally {
     parsing.value = false

@@ -1,4 +1,6 @@
 """ChatAgent：AI 聊天助手（独立封装，支持 Markdown 回复）。"""
+from collections.abc import Iterator
+
 from app.agents.base import BaseAgent
 
 # 聊天系统提示词：要求基于项目知识库回答并使用 Markdown
@@ -24,6 +26,17 @@ class ChatAgent(BaseAgent):
         user_prompt = self._build_user_prompt(question, history, knowledge)
         raw = self._provider.chat(system_prompt or SYSTEM_PROMPT, user_prompt)
         return raw.strip()
+
+    def stream_respond(
+        self,
+        question: str,
+        history: list,
+        knowledge: str,
+        system_prompt: str | None = None,
+    ) -> Iterator[str]:
+        """流式生成回复文本，逐块产出（配合 SSE 实现打字机效果）。"""
+        user_prompt = self._build_user_prompt(question, history, knowledge)
+        return self._provider.stream_chat(system_prompt or SYSTEM_PROMPT, user_prompt)
 
     def _build_user_prompt(
         self, question: str, history: list, knowledge: str

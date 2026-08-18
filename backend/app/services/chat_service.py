@@ -1,6 +1,7 @@
 """AI 聊天业务逻辑：上下文记忆、项目知识库与回复生成。"""
 import json
 import time
+from collections.abc import Iterator
 
 from sqlalchemy.orm import Session
 
@@ -132,3 +133,71 @@ def build_reply(
     db.commit()
     db.refresh(assistant)
     return assistant
+
+
+def stream_build_reply(
+    db: Session, user_id: int, project_id: int, question: str
+) -> Iterator[tuple[str, dict]]:
+    """流式生成聊天回复（SSE 事件生成器）。
+
+    依次产出事件元组 (event, data)：
+        delta  —— {"content": str}  文本增量（逐字/逐块）
+        result —— {"id", "content", "created_at"} 完整回复（已保存）
+        error  —— {"message": str}  调用失败
+    """
+    history = get_recent_history(db, user_id, project_id)
+    knowledge = build_project_knowledge(db, project_id)
+    prompt_length = (
+        len(question)
+        + len(knowledge)
+        + sum(len(message.content) for message in history)
+    )
+    start = time.monotonic()
+    try:
+        agent = ChatAgent(get_llm_provider(db))
+        system_prompt = get_setting(db, "prompt_chat")
+        pieces: list[str] = []
+        for chunk in agent.stream_respond(question, history, knowledge, system_prompt):
+            pieces.append(chunk)
+            yield "delta", {"content": chunk}
+        reply_content = "".join(pieces).strip()
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="Chat",
+            provider=agent.provider_name,
+            prompt_length=prompt_length,
+            response_length=len(reply_content),
+            duration_ms=duration_ms,
+        )
+    except Exception as exc:  # 模型调用/密钥配置失败
+        duration_ms = int((time.monotonic() - start) * 1000)
+        log_ai_call(
+            db,
+            user_id=user_id,
+            agent="Chat",
+            provider=None,
+            prompt_length=prompt_length,
+            response_length=0,
+            duration_ms=duration_ms,
+            status="failed",
+            error_message=str(exc)[:500],
+        )
+        yield "error", {"message": f"AI 服务调用失败：{exc}，请检查 API 配置"}
+        return
+
+    assistant = ChatHistory(
+        user_id=user_id,
+        project_id=project_id,
+        role="assistant",
+        content=reply_content,
+    )
+    db.add(assistant)
+    db.commit()
+    db.refresh(assistant)
+    yield "result", {
+        "id": assistant.id,
+        "content": reply_content,
+        "created_at": assistant.created_at.isoformat() if assistant.created_at else None,
+    }

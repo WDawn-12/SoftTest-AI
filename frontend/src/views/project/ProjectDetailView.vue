@@ -140,8 +140,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { getProjectApi } from '@/api/project'
 import { listRequirementsApi } from '@/api/requirement'
-import { generateTestCasesApi } from '@/api/testcase'
-import { generateTestPointsApi } from '@/api/testpoint'
+import { generateTestCasesStreamApi } from '@/api/testcase'
+import { generateTestPointsStreamApi } from '@/api/testpoint'
 import {
   createSutApi,
   getSutApi,
@@ -149,6 +149,8 @@ import {
   updateSutApi,
 } from '@/api/sut'
 import type { Project } from '@/types/project'
+import type { TestCase } from '@/types/testcase'
+import type { TestPoint } from '@/types/testpoint'
 import type { SutInfo, SystemType, BrowserType, TestConnectionResult } from '@/types/sut'
 
 const route = useRoute()
@@ -231,8 +233,20 @@ async function handleGeneratePoints() {
   if (!rid) return
   generatingPoints.value = true
   try {
-    const created = await generateTestPointsApi(projectId, rid)
-    ElMessage.success(`已生成 ${created.length} 条测试点`)
+    await generateTestPointsStreamApi(
+      projectId,
+      rid,
+      {
+        onEvent(event, data) {
+          if (event === 'result') {
+            ElMessage.success(`已生成 ${(data as TestPoint[]).length} 条测试点`)
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || '测试点生成失败，请重试')
+        },
+      },
+    )
   } finally {
     generatingPoints.value = false
   }
@@ -243,9 +257,24 @@ async function handleGenerateCases() {
   if (!rid) return
   generatingCases.value = true
   try {
-    const created = await generateTestCasesApi(projectId, rid)
-    ElMessage.success(
-      `已生成 ${created.length} 条测试用例（${created[0].case_no} - ${created[created.length - 1].case_no}）`,
+    await generateTestCasesStreamApi(
+      projectId,
+      rid,
+      {
+        onEvent(event, data) {
+          if (event === 'result') {
+            const created = data as TestCase[]
+            const range =
+              created.length > 1
+                ? `${created[0].case_no} - ${created[created.length - 1].case_no}`
+                : created[0]?.case_no || ''
+            ElMessage.success(`已生成 ${created.length} 条测试用例${range ? `（${range}）` : ''}`)
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || '测试用例生成失败，请重试')
+        },
+      },
     )
   } finally {
     generatingCases.value = false

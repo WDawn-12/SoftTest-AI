@@ -44,6 +44,16 @@
         </el-button>
       </div>
 
+      <!-- AI 生成进度 -->
+      <el-alert
+        v-if="generating"
+        type="info"
+        :closable="false"
+        :title="generateProgress"
+        show-icon
+        style="margin-top: 12px"
+      />
+
       <!-- 筛选 -->
       <div class="toolbar" style="margin-top: 10px">
         <el-select
@@ -191,7 +201,7 @@ import { listRequirementsApi } from '@/api/requirement'
 import {
   deleteTestCaseApi,
   exportTestCasesApi,
-  generateTestCasesApi,
+  generateTestCasesStreamApi,
   listTestCasesApi,
   updateTestCaseApi,
 } from '@/api/testcase'
@@ -213,6 +223,7 @@ const exporting = ref(false)
 const items = ref<TestCase[]>([])
 const total = ref(0)
 const query = reactive({ page: 1, page_size: 10 })
+const generateProgress = ref('正在调用 TestCase Agent 生成测试用例...')
 
 // 优先级展示映射
 const priorityMeta: Record<string, { type: 'danger' | 'warning' | 'info' }> = {
@@ -277,9 +288,30 @@ async function handleGenerate() {
     return
   }
   generating.value = true
+  generateProgress.value = '正在调用 TestCase Agent 生成测试用例（含测试数据）...'
   try {
-    const created = await generateTestCasesApi(projectId.value, requirementId.value)
-    ElMessage.success(`已生成 ${created.length} 条测试用例（${created[0].case_no} - ${created[created.length - 1].case_no}）`)
+    await generateTestCasesStreamApi(
+      projectId.value,
+      requirementId.value,
+      {
+        onEvent(event, data) {
+          if (event === 'status') {
+            const stage = data as { message?: string }
+            if (stage?.message) generateProgress.value = stage.message
+          } else if (event === 'result') {
+            const created = data as TestCase[]
+            const range =
+              created.length > 1
+                ? `${created[0].case_no} - ${created[created.length - 1].case_no}`
+                : created[0]?.case_no || ''
+            ElMessage.success(`已生成 ${created.length} 条测试用例${range ? `（${range}）` : ''}`)
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || '测试用例生成失败，请重试')
+        },
+      },
+    )
     loadList()
   } finally {
     generating.value = false

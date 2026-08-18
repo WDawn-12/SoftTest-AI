@@ -2,6 +2,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbDep, get_current_user, get_owned_project
 from app.models.chat_history import ChatHistory
@@ -12,7 +13,8 @@ from app.schemas.chat import (
     ChatMessageOut,
     ChatReplyOut,
 )
-from app.services.chat_service import build_reply
+from app.services.chat_service import build_reply, stream_build_reply
+from app.services.sse import sse_event
 
 router = APIRouter(prefix="/projects/{project_id}/chat", tags=["AI 聊天"])
 
@@ -39,6 +41,51 @@ def send_message(
     db.refresh(assistant)
     return ChatReplyOut(
         id=assistant.id, content=assistant.content, created_at=assistant.created_at
+    )
+
+
+@router.post(
+    "/messages/stream",
+    summary="发送消息（AI 对话，SSE 流式返回）",
+    responses={
+        200: {
+            "description": "SSE 事件流：delta（文本增量）/ result（完整回复）/ error",
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def send_message_stream(
+    project_id: int,
+    payload: ChatMessageIn,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """流式发送消息：AI 回复逐字返回（打字机效果），完成后保存到聊天记录。"""
+    get_owned_project(db, project_id, current_user)
+    # 先保存用户消息
+    user_message = ChatHistory(
+        user_id=current_user.id,
+        project_id=project_id,
+        role="user",
+        content=payload.content,
+    )
+    db.add(user_message)
+    db.commit()
+
+    def event_stream():
+        for event, data in stream_build_reply(
+            db, current_user.id, project_id, payload.content
+        ):
+            yield sse_event(event, data)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

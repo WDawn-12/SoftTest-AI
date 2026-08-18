@@ -1,5 +1,6 @@
 // 测试用例相关 API
 import request from '@/utils/request'
+import { fetchSSE, type SSEHandlers } from '@/utils/sse'
 import type {
   TestCase,
   TestCaseListResult,
@@ -31,6 +32,21 @@ export function generateTestCasesApi(
   return request.post(
     `/v1/projects/${projectId}/requirements/${requirementId}/test-cases/generate`,
   ) as unknown as Promise<TestCase[]>
+}
+
+// 调用 TestCase Agent 生成测试用例（SSE 流式：阶段进度 + 测试用例列表）
+// 事件：status（阶段进度）/ result（测试用例列表）/ error
+export function generateTestCasesStreamApi(
+  projectId: number,
+  requirementId: number,
+  handlers: SSEHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  return fetchSSE(
+    `/v1/projects/${projectId}/requirements/${requirementId}/test-cases/generate/stream`,
+    { method: 'POST', signal },
+    handlers,
+  )
 }
 
 // 编辑测试用例（人工编辑）

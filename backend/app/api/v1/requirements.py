@@ -1,10 +1,14 @@
 """需求文档接口：上传（Word/PDF/TXT/Markdown）与查询管理。"""
 import json
+import time
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbDep, get_current_user, get_owned_project
 from app.core.config import settings
@@ -22,6 +26,7 @@ from app.services.requirement_service import run_requirement_parse
 from app.services.testcase_service import build_testcase_out, run_testcase_generation
 from app.services.testpoint_service import build_testpoint_out, run_testpoint_generation
 from app.services.document_parser import extract_text
+from app.services.sse import sse_event
 
 router = APIRouter(prefix="/projects/{project_id}/requirements", tags=["需求文档"])
 
@@ -35,6 +40,22 @@ ALLOWED_EXTENSIONS = {
 }
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _progress_stream(stage_messages: dict[str, str], runner, *args) -> Iterator[str]:
+    """把一次阻塞的 AI 生成任务包装为 SSE 阶段进度事件流。
+
+    事件顺序：status(llm) -> status(save) -> result / error
+    runner 返回 JSON 可序列化的结果。
+    """
+    try:
+        yield sse_event("status", {"stage": "llm", "message": stage_messages.get("llm", "正在调用 AI 生成...")})
+        time.sleep(0.2)  # 让阶段进度可见（真实 LLM 调用耗时较长，可忽略）
+        result = runner(*args)
+        yield sse_event("status", {"stage": "save", "message": stage_messages.get("save", "结果已保存")})
+        yield sse_event("result", result)
+    except Exception as exc:
+        yield sse_event("error", {"message": str(exc)})
 
 
 def _get_requirement(
@@ -251,3 +272,119 @@ def generate_test_cases(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return build_testcase_out(db, created)
+
+
+@router.post(
+    "/{requirement_id}/parse/stream",
+    summary="AI 解析需求文档（SSE 流式返回）",
+    responses={
+        200: {
+            "description": "SSE 事件流：status（阶段进度）/ result（解析结果）/ error",
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def parse_requirement_stream(
+    project_id: int,
+    requirement_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """流式解析需求：先推送调用进度，完成后推送完整结构化结果。"""
+    requirement = _get_requirement(db, project_id, requirement_id, current_user)
+
+    def run_parse():
+        run_requirement_parse(db, requirement, current_user.id)
+        return {
+            "requirement_id": requirement.id,
+            "parse_status": requirement.parse_status,
+            "error_message": requirement.error_message,
+            "result": _load_result(requirement),
+        }
+
+    return StreamingResponse(
+        _progress_stream(
+            {"llm": "正在调用 Requirement Agent 解析需求文档...", "save": "解析完成，结构化结果已保存"},
+            run_parse,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/{requirement_id}/test-points/generate/stream",
+    summary="生成测试点（SSE 流式返回）",
+    responses={
+        200: {
+            "description": "SSE 事件流：status（阶段进度）/ result（测试点列表）/ error",
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def generate_test_points_stream(
+    project_id: int,
+    requirement_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """流式生成测试点：先推送调用进度，完成后推送测试点列表。"""
+    requirement = _get_requirement(db, project_id, requirement_id, current_user)
+
+    def run_generate():
+        created = run_testpoint_generation(db, requirement, current_user.id)
+        return jsonable_encoder(build_testpoint_out(db, created))
+
+    return StreamingResponse(
+        _progress_stream(
+            {"llm": "正在调用 TestPoint Agent 按五类维度生成测试点...", "save": "测试点已保存"},
+            run_generate,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/{requirement_id}/test-cases/generate/stream",
+    summary="生成测试用例（SSE 流式返回）",
+    responses={
+        200: {
+            "description": "SSE 事件流：status（阶段进度）/ result（测试用例列表）/ error",
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def generate_test_cases_stream(
+    project_id: int,
+    requirement_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """流式生成测试用例：先推送调用进度，完成后推送测试用例列表。"""
+    requirement = _get_requirement(db, project_id, requirement_id, current_user)
+
+    def run_generate():
+        created = run_testcase_generation(db, requirement, current_user.id)
+        return jsonable_encoder(build_testcase_out(db, created))
+
+    return StreamingResponse(
+        _progress_stream(
+            {"llm": "正在调用 TestCase Agent 生成测试用例（含测试数据）...", "save": "测试用例已保存"},
+            run_generate,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

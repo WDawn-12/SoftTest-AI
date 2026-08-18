@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -79,7 +79,7 @@ import { listProjectsApi } from '@/api/project'
 import {
   clearChatHistoryApi,
   getChatHistoryApi,
-  sendChatMessageApi,
+  sendChatMessageStreamApi,
 } from '@/api/chat'
 import type { ChatMessage } from '@/types/chat'
 import type { Project } from '@/types/project'
@@ -91,6 +91,8 @@ const draft = ref('')
 const sending = ref(false)
 const loadingHistory = ref(false)
 const messageListRef = ref<HTMLElement>()
+// 流式请求控制：切换项目/离开页面时中止未完成的回复
+let streamAbort: AbortController | null = null
 
 // 渲染 Markdown（先解析再消毒，防止 XSS）
 function renderMarkdown(text: string): string {
@@ -111,6 +113,8 @@ async function loadProjects() {
 }
 
 async function handleProjectChange() {
+  streamAbort?.abort()
+  streamAbort = null
   messages.value = []
   if (!projectId.value) return
   loadingHistory.value = true
@@ -131,15 +135,56 @@ async function handleSend() {
   if (!content || !projectId.value || sending.value) return
   draft.value = ''
   sending.value = true
+
+  // 先本地展示用户消息与空的助手消息（打字机容器）
+  messages.value.push({
+    id: Date.now() * -1,
+    role: 'user',
+    content,
+    created_at: '',
+  })
+  const assistantIndex = messages.value.push({
+    id: 0,
+    role: 'assistant',
+    content: '',
+    created_at: '',
+  }) - 1
+  scrollToBottom()
+
+  streamAbort = new AbortController()
   try {
-    await sendChatMessageApi(projectId.value, content)
-    const data = await getChatHistoryApi(projectId.value, {
-      page: 1,
-      page_size: 100,
-    })
-    messages.value = data.items
+    await sendChatMessageStreamApi(
+      projectId.value,
+      content,
+      {
+        onEvent(event, data) {
+          if (event === 'delta') {
+            const piece = (data as { content?: string })?.content || ''
+            const target = messages.value[assistantIndex]
+            if (target) target.content += piece
+            scrollToBottom()
+          } else if (event === 'result') {
+            // 完整回复已保存，用真实 id/时间替换临时消息
+            const saved = data as { id: number; content: string; created_at: string }
+            const target = messages.value[assistantIndex]
+            if (target) {
+              target.id = saved.id
+              target.content = saved.content || target.content
+              target.created_at = saved.created_at || ''
+            }
+          }
+        },
+        onError(message) {
+          ElMessage.error(message || 'AI 回复失败')
+        },
+      },
+      streamAbort.signal,
+    )
     scrollToBottom()
+  } catch {
+    // 请求中断（切换项目/离开页面）不提示
   } finally {
+    streamAbort = null
     sending.value = false
   }
 }
@@ -159,6 +204,7 @@ async function handleClear() {
 }
 
 onMounted(loadProjects)
+onUnmounted(() => streamAbort?.abort())
 </script>
 
 <style scoped>
