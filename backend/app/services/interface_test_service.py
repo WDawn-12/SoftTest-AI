@@ -472,7 +472,15 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
                 body_raw=body_raw,
             ),
         )
-        samplers.append(f"{sampler}{assertion}")
+        # JMeter 树结构：每个元素节点后必须紧跟 <hashTree> 子容器
+        # Sampler → <hashTree> → Assertion → <hashTree/>（空）
+        samplers.append(
+            f"{sampler}"
+            "<hashTree>"
+            f"{assertion}"
+            "<hashTree/>"
+            "</hashTree>"
+        )
 
     # 监听器：查看结果树 + 聚合报告
     listeners = (
@@ -558,11 +566,11 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
         ),
     )
 
-    # 组装 hashTree
-    sampler_tree = "".join(
-        f"<hashTree>{s}</hashTree>" for s in samplers
-    )
-    listener_tree = "".join(f"<hashTree>{l}</hashTree>" for l in listeners)
+    # 组装 hashTree（JMeter 约定：每个元素节点后紧跟 <hashTree> 子容器）
+    # samplers 每项已是 sampler + <hashTree>assertion<hashTree/></hashTree>，直接拼接
+    sampler_tree = "".join(samplers)
+    # listeners 每个后跟空 <hashTree/>
+    listener_tree = "".join(f"{l}<hashTree/>" for l in listeners)
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">'

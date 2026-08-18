@@ -318,6 +318,9 @@ def test_export_interface_cases_jmeter(client, user_headers):
     assert "base_url" in text
     # 15 条用例 → 15 个 HTTP Sampler
     assert text.count('testclass="HTTPSamplerProxy"') == 15
+    # 树结构：Sampler 后跟 <hashTree>、断言后跟 <hashTree/>（JMeter 强制约定）
+    assert '</HTTPSamplerProxy><hashTree>' in text
+    assert '</ResponseAssertion><hashTree/>' in text
     # POST 用例含 JSON body、断言含状态码
     assert "HTTPSampler.postBodyRaw" in text
     assert 'testclass="ResponseAssertion"' in text
