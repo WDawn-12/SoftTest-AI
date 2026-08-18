@@ -252,6 +252,98 @@ def export_interface_cases_excel(db: Session, project_id: int) -> bytes:
     return build_testcase_excel(rows)
 
 
+def build_postman_collection(db: Session, project_id: int) -> dict:
+    """构建 Postman Collection v2.1 JSON（Apifox 亦兼容）。
+
+    将项目下全部接口测试用例映射为 Collection items：
+    - 方法/路径 → request.method / url
+    - 查询参数（?a=1&b=2）→ url.query
+    - JSON 请求体 → body.raw
+    - 前置条件/步骤/预期结果 → description
+    - Base URL 使用 {{base_url}} 环境变量占位
+    """
+    cases = (
+        db.query(InterfaceTestCase)
+        .filter(InterfaceTestCase.project_id == project_id)
+        .order_by(InterfaceTestCase.case_no)
+        .all()
+    )
+    items: list[dict] = []
+    for case in cases:
+        title = case.title or case.case_no
+        description_lines = [
+            f"用例编号：{case.case_no}",
+            f"优先级：{case.priority}",
+            f"类别：{case.category}",
+        ]
+        if case.preconditions:
+            description_lines.append(f"前置条件：{case.preconditions}")
+        if case.steps:
+            description_lines.append(f"测试步骤：\n{case.steps}")
+        if case.expected_result:
+            description_lines.append(f"预期结果：{case.expected_result}")
+        if case.remark:
+            description_lines.append(f"备注：{case.remark}")
+
+        item = {
+            "name": f"{case.case_no} {title}",
+            "request": {
+                "method": case.method or "GET",
+                "header": [
+                    {"key": "Content-Type", "value": "application/json", "description": ""}
+                ],
+                "url": {
+                    "raw": f"{{{{base_url}}}}{case.path or ''}",
+                    "host": ["{{base_url}}"],
+                    "path": (case.path or "").strip("/").split("/")
+                    if case.path
+                    else [],
+                },
+                "description": "\n".join(description_lines),
+            },
+            "response": [],
+        }
+        # 查询参数（?a=1&b=2 或 key=value 格式）
+        payload = (case.request_payload or "").strip()
+        if payload and not payload.startswith("{"):
+            query_text = payload.lstrip("?")
+            query = []
+            for pair in query_text.split("&"):
+                pair = pair.strip()
+                if not pair:
+                    continue
+                if "=" in pair:
+                    key, value = pair.split("=", 1)
+                else:
+                    key, value = pair, ""
+                query.append(
+                    {"key": key, "value": value, "description": "", "disabled": False}
+                )
+            if query:
+                item["request"]["url"]["query"] = query
+        # JSON 请求体
+        if case.method in ("POST", "PUT", "PATCH") and payload.startswith("{"):
+            item["request"]["body"] = {
+                "mode": "raw",
+                "raw": payload,
+                "options": {"raw": {"language": "json"}},
+            }
+        items.append(item)
+
+    project_name = db.get(Project, project_id).name if db.get(Project, project_id) else f"项目{project_id}"
+    return {
+        "info": {
+            "name": f"接口测试用例（{project_name}）",
+            "description": (
+                f"由 AITestAgent 接口测试模块导出，共 {len(items)} 条用例。"
+                "导入后请配置环境变量 base_url（如 http://localhost:8000）。"
+            ),
+            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
+        "item": items,
+    }
+
+
 # ---------- 工具函数 ----------
 def _next_case_no(db: Session, project_id: int) -> int:
     """计算项目内下一个接口用例编号数字部分（API0001 起）。"""

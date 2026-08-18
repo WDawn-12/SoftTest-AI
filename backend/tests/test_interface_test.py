@@ -242,6 +242,49 @@ def test_export_interface_cases_excel(client, user_headers):
     assert resp.content[:2] == b"PK"
 
 
+def test_export_interface_cases_postman(client, user_headers):
+    """Postman Collection v2.1 导出：方法与路径映射、query、body、描述完整。"""
+    import json
+
+    pid = _create_project(client, user_headers)
+    _create_interface(client, pid, user_headers, path="/api/users/search")
+    _create_interface(
+        client, pid, user_headers, name="创建用户", method="POST", path="/api/users"
+    )
+    _create_interface(
+        client, pid, user_headers,
+        name="删除用户", method="DELETE", path="/api/users/{id}",
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/interfaces/generate-cases",
+        json={},
+        headers=user_headers,
+    )
+    resp = client.get(
+        f"/api/v1/projects/{pid}/interface-cases/export/postman",
+        headers=user_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/json")
+    data = json.loads(resp.content.decode("utf-8"))
+    assert data["info"]["schema"].endswith("collection/v2.1.0/collection.json")
+    # 3 个接口 × 5 类 = 15 条
+    assert len(data["item"]) == 15
+    # 方法覆盖：GET / POST / DELETE
+    methods = {it["request"]["method"] for it in data["item"]}
+    assert {"GET", "POST", "DELETE"} <= methods
+    # GET 用例含 query 参数（demo 数据 ?username=...）
+    get_item = next(it for it in data["item"] if it["request"]["method"] == "GET")
+    assert "query" in get_item["request"]["url"]
+    # POST 用例含 JSON body
+    post_item = next(it for it in data["item"] if it["request"]["method"] == "POST")
+    assert post_item["request"]["body"]["mode"] == "raw"
+    assert post_item["request"]["body"]["raw"].startswith("{")
+    # 描述包含前置条件与预期结果
+    assert "前置条件" in get_item["request"]["description"]
+    assert "预期结果" in get_item["request"]["description"]
+
+
 def test_interface_permission_isolation(client):
     """用户 B 不能访问用户 A 项目下的接口。"""
     register_user(client, "user_a", "pass12345")

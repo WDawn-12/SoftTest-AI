@@ -117,3 +117,11 @@ export function exportInterfaceCasesApi(projectId: number): Promise<Blob> {
     responseType: 'blob',
   }) as unknown as Promise<Blob>
 }
+
+// 导出接口用例为 Postman/Apifox Collection JSON
+export function exportInterfaceCasesPostmanApi(projectId: number): Promise<Blob> {
+  return request.get(
+    `/v1/projects/${projectId}/interface-cases/export/postman`,
+    { responseType: 'blob' },
+  ) as unknown as Promise<Blob>
+}

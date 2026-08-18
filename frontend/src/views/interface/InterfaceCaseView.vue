@@ -26,6 +26,9 @@
         <el-button type="success" :disabled="!projectId" @click="handleExport">
           导出 Excel
         </el-button>
+        <el-button type="warning" :disabled="!projectId" @click="handleExportPostman">
+          导出 Postman / Apifox
+        </el-button>
       </div>
 
       <!-- AI 生成进度 -->
@@ -183,6 +186,7 @@ import type { ApiInterface, InterfaceCase } from '@/types/interfaceTest'
 import {
   deleteInterfaceCaseApi,
   exportInterfaceCasesApi,
+  exportInterfaceCasesPostmanApi,
   generateInterfaceCasesApi,
   listInterfaceCasesApi,
   updateInterfaceCaseApi,
@@ -335,6 +339,24 @@ async function handleExport() {
     a.download = 'interface_test_cases.xlsx'
     a.click()
     URL.revokeObjectURL(url)
+  } catch {
+    // 已由拦截器提示
+  }
+}
+
+async function handleExportPostman() {
+  if (!projectId.value) return
+  try {
+    const blob = await exportInterfaceCasesPostmanApi(projectId.value)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'interface_test_cases.postman_collection.json'
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(
+      '已导出 Postman Collection，导入后配置环境变量 base_url 即可使用',
+    )
   } catch {
     // 已由拦截器提示
   }

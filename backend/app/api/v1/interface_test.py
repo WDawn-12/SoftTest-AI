@@ -21,6 +21,7 @@ from app.schemas.interface_test import (
 from app.services.interface_test_service import (
     build_interface_case_out,
     build_interface_out,
+    build_postman_collection,
     export_interface_cases_excel,
     run_interface_case_generation,
 )
@@ -312,6 +313,35 @@ def export_interface_cases(
         headers={
             "Content-Disposition": (
                 "attachment; filename=interface_test_cases.xlsx"
+            )
+        },
+    )
+
+
+@router.get(
+    "/interface-cases/export/postman",
+    summary="导出接口测试用例为 Postman/Apifox Collection JSON",
+)
+def export_interface_cases_postman(
+    project_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """导出项目下全部接口测试用例为 Postman Collection v2.1 JSON（Apifox 兼容）。
+
+    导入后配置环境变量 base_url 即可直接发送请求。
+    """
+    get_owned_project(db, project_id, current_user)
+    collection = build_postman_collection(db, project_id)
+    import json
+
+    content = json.dumps(collection, ensure_ascii=False, indent=2).encode("utf-8")
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=interface_test_cases.postman_collection.json"
             )
         },
     )
