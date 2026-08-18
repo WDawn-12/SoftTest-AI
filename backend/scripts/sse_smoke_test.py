@@ -95,6 +95,24 @@ def main():
         lines = [l for l in block.splitlines() if l]
         if lines:
             print("  ", " | ".join(lines[:1]))
+
+    # 6. 聊天工具调用（Agent 能力）
+    print("\n=== chat/messages/stream (tool call) ===")
+    req = urllib.request.Request(
+        f"{BASE}/projects/{pid}/chat/messages/stream",
+        data=json.dumps({"content": "请生成用户名的测试数据"}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        chunks = resp.read().decode()
+    has_tool = "event: tool" in chunks
+    print(f"tool event present: {has_tool}")
+    for block in chunks.strip().split("\n\n"):
+        lines = [l for l in block.splitlines() if l]
+        if lines:
+            print("  ", " | ".join(lines[:2]))
+    assert has_tool, "FAIL: 未检测到 tool 事件"
     print("\n[ALL OK]")
 
 

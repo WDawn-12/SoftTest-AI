@@ -39,6 +39,14 @@
           :class="m.role"
         >
           <div class="bubble" :class="m.role">
+            <!-- Agent 工具调用记录 -->
+            <div v-if="m.role === 'assistant' && m.tool_uses?.length" class="tool-calls">
+              <div v-for="(tool, idx) in m.tool_uses" :key="idx" class="tool-call">
+                <el-icon :size="13" style="margin-right: 4px"><MagicStick /></el-icon>
+                <span class="tool-name">{{ tool.name }}</span>
+                <span v-if="tool.args?.field" class="tool-args">字段：{{ tool.args.field }}</span>
+              </div>
+            </div>
             <div v-if="m.role === 'assistant'" class="markdown-body" v-html="renderMarkdown(m.content)" />
             <div v-else class="user-text">{{ m.content }}</div>
           </div>
@@ -73,6 +81,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { MagicStick } from '@element-plus/icons-vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { listProjectsApi } from '@/api/project'
@@ -81,7 +90,7 @@ import {
   getChatHistoryApi,
   sendChatMessageStreamApi,
 } from '@/api/chat'
-import type { ChatMessage } from '@/types/chat'
+import type { ChatMessage, ChatToolUse } from '@/types/chat'
 import type { Project } from '@/types/project'
 
 const projects = ref<Project[]>([])
@@ -158,13 +167,22 @@ async function handleSend() {
       content,
       {
         onEvent(event, data) {
-          if (event === 'delta') {
+          if (event === 'tool') {
+            // Agent 工具调用：记录到当前助手消息（过程性展示）
+            const tool = data as { name: string; args: Record<string, unknown> }
+            const target = messages.value[assistantIndex]
+            if (target) {
+              if (!target.tool_uses) target.tool_uses = []
+              target.tool_uses.push({ name: tool.name, args: tool.args } as ChatToolUse)
+              scrollToBottom()
+            }
+          } else if (event === 'delta') {
             const piece = (data as { content?: string })?.content || ''
             const target = messages.value[assistantIndex]
             if (target) target.content += piece
             scrollToBottom()
           } else if (event === 'result') {
-            // 完整回复已保存，用真实 id/时间替换临时消息
+            // 完整回复已保存，用真实 id/时间替换临时消息（保留工具记录）
             const saved = data as { id: number; content: string; created_at: string }
             const target = messages.value[assistantIndex]
             if (target) {
@@ -254,6 +272,37 @@ onUnmounted(() => streamAbort?.abort())
 .bubble.assistant {
   background-color: #f4f4f5;
   color: #303133;
+}
+
+/* Agent 工具调用卡片 */
+.tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.tool-call {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: #606266;
+  background-color: #e8f3ff;
+  border: 1px solid #d4e6ff;
+  border-radius: 6px;
+}
+
+.tool-name {
+  font-weight: 600;
+  color: #409eff;
+  font-family: Consolas, Monaco, monospace;
+}
+
+.tool-args {
+  margin-left: 4px;
+  color: #909399;
 }
 
 .user-text {

@@ -6,7 +6,7 @@ from collections.abc import Iterator
 from sqlalchemy.orm import Session
 
 from app.agents.chat_agent import ChatAgent
-from app.agents.llm import get_llm_provider
+from app.agents.llm import _chunk_text, get_llm_provider
 from app.models.chat_history import ChatHistory
 from app.models.requirement import Requirement
 from app.models.project import Project
@@ -141,9 +141,10 @@ def stream_build_reply(
     """流式生成聊天回复（SSE 事件生成器）。
 
     依次产出事件元组 (event, data)：
-        delta  —— {"content": str}  文本增量（逐字/逐块）
+        tool  —— {"name", "args"}                 工具调用（Agent 能力）
+        delta —— {"content": str}                 文本增量（逐字/逐块）
         result —— {"id", "content", "created_at"} 完整回复（已保存）
-        error  —— {"message": str}  调用失败
+        error  —— {"message": str}                调用失败
     """
     history = get_recent_history(db, user_id, project_id)
     knowledge = build_project_knowledge(db, project_id)
@@ -156,11 +157,28 @@ def stream_build_reply(
     try:
         agent = ChatAgent(get_llm_provider(db))
         system_prompt = get_setting(db, "prompt_chat")
-        pieces: list[str] = []
-        for chunk in agent.stream_respond(question, history, knowledge, system_prompt):
-            pieces.append(chunk)
-            yield "delta", {"content": chunk}
-        reply_content = "".join(pieces).strip()
+        # 工具调用阶段：真实大模型自主决策 / demo 关键词模拟
+        tool_records, tool_reply = agent.run_tools(
+            question, history, knowledge, system_prompt, db=db, project_id=project_id
+        )
+        for record in tool_records:
+            yield "tool", {
+                "name": record.get("name", ""),
+                "args": record.get("args", {}),
+            }
+        if tool_reply is not None:
+            # 工具结果已生成回复：分块流式输出（打字机效果）
+            pieces = list(_chunk_text(tool_reply, size=16))
+            reply_content = tool_reply.strip()
+        else:
+            pieces = []
+            reply_content = ""
+            for chunk in agent.stream_respond(
+                question, history, knowledge, system_prompt
+            ):
+                pieces.append(chunk)
+                reply_content += chunk
+                yield "delta", {"content": chunk}
         duration_ms = int((time.monotonic() - start) * 1000)
         log_ai_call(
             db,

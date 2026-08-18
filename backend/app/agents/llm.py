@@ -3,7 +3,7 @@ import json
 import re
 import time
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 from sqlalchemy.orm import Session
 
@@ -34,6 +34,22 @@ class LLMProvider(ABC):
         """
         content = self.chat(system_prompt, user_prompt)
         yield from _chunk_text(content)
+
+    def run_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict],
+        tool_handler: Callable[[str, dict], dict],
+    ) -> tuple[list[dict], str | None]:
+        """执行工具调用阶段。
+
+        返回 (工具调用记录, 最终回复文本)；未命中任何工具时返回 ([], None)，
+        调用方应继续走普通对话流程。
+
+        默认实现：不调用任何工具。
+        """
+        return [], None
 
 
 class OpenAILikeProvider(LLMProvider):
@@ -81,6 +97,55 @@ class OpenAILikeProvider(LLMProvider):
             if piece:
                 yield str(piece)
 
+    def run_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict],
+        tool_handler: Callable[[str, dict], dict],
+    ) -> tuple[list[dict], str | None]:
+        """OpenAI 函数调用循环：让模型自主决策调用工具，直到给出最终回复。"""
+        from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+        from langchain_openai import ChatOpenAI
+
+        from app.agents.tools import summarize_tool_result
+
+        llm = ChatOpenAI(
+            model=self._model,
+            api_key=self._api_key,
+            base_url=self._base_url,
+            temperature=0.2,
+            timeout=120,
+        ).bind_tools(tools)
+
+        messages: list = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt),
+        ]
+        records: list[dict] = []
+        for _round in range(5):  # 最多 5 轮工具调用，防止死循环
+            ai_msg = llm.invoke(messages)
+            messages.append(ai_msg)
+            tool_calls = getattr(ai_msg, "tool_calls", None)
+            if not tool_calls:
+                return records, str(ai_msg.content or "").strip()
+            for tc in tool_calls:
+                name = tc.get("name", "")
+                args = tc.get("args") or {}
+                try:
+                    result = tool_handler(name, args)
+                except Exception as exc:  # 工具执行失败也回传模型，由其决定后续
+                    result = {"error": str(exc)}
+                records.append({"name": name, "args": args, "result": result})
+                messages.append(
+                    ToolMessage(
+                        content=summarize_tool_result(result),
+                        tool_call_id=tc.get("id", ""),
+                    )
+                )
+        # 达到轮次上限：返回最后一段回复
+        return records, str(messages[-1].content or "").strip()
+
 
 class DemoProvider(LLMProvider):
     """演示供应商：未配置 API Key 时使用，返回固定结构的示例解析结果。"""
@@ -111,6 +176,54 @@ class DemoProvider(LLMProvider):
         for piece in _chunk_text(content, size=8):
             yield piece
             time.sleep(0.01)
+
+    def run_tools(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        tools: list[dict],
+        tool_handler: Callable[[str, dict], dict],
+    ) -> tuple[list[dict], str | None]:
+        """演示供应商工具模拟：按关键词识别工具意图并执行真实工具。
+
+        demo 模式下大模型不参与决策，用关键词匹配模拟 Agent 的工具调用行为。
+        """
+        # 生成测试数据：问题提到字段 + 测试数据
+        field = self._detect_field(user_prompt)
+        if field:
+            result = tool_handler("generate_test_data", {"field": field})
+            records = [{"name": "generate_test_data", "args": {"field": field}, "result": result}]
+            lines = [
+                f"已调用工具 **generate_test_data**（字段：{field}，共 {len(result.get('data', []))} 类）",
+                "",
+                "| 类别 | 测试数据 |",
+                "| --- | --- |",
+            ]
+            for item in result.get("data", []):
+                lines.append(f"| {item.get('case', '')} | {item.get('value', '')} |")
+            lines.extend(
+                [
+                    "",
+                    "> 当前为演示模式（关键词模拟工具调用）；配置真实 API Key 后，"
+                    "大模型将自主决策调用哪些工具。",
+                ]
+            )
+            return records, "\n".join(lines)
+        return [], None
+
+    # 常见字段名关键词（用于 demo 模式工具识别）
+    _FIELD_KEYWORDS = ["用户名", "账号", "密码", "手机号", "手机号码", "邮箱", "姓名", "身份证", "金额", "库存", "地址"]
+
+    def _detect_field(self, user_prompt: str) -> str | None:
+        """从用户问题中识别字段名；未命中返回 None。"""
+        if not any(kw in user_prompt for kw in ("测试数据", "生成数据", "数据样本", "造数据")):
+            return None
+        for keyword in self._FIELD_KEYWORDS:
+            if keyword in user_prompt:
+                return keyword
+        # 兜底：匹配「xxx」内的字段名
+        match = re.search(r"「([^」]{1,20})」", user_prompt)
+        return match.group(1) if match else None
 
     def _extract_functions(self, user_prompt: str) -> list[dict] | None:
         """从用户提示中提取功能点 JSON（TestPoint Agent 专用）。"""
