@@ -29,6 +29,9 @@
         <el-button type="warning" :disabled="!projectId" @click="handleExportPostman">
           导出 Postman / Apifox
         </el-button>
+        <el-button type="danger" plain :disabled="!projectId" @click="handleExportJmeter">
+          导出 JMeter
+        </el-button>
       </div>
 
       <!-- AI 生成进度 -->
@@ -186,6 +189,7 @@ import type { ApiInterface, InterfaceCase } from '@/types/interfaceTest'
 import {
   deleteInterfaceCaseApi,
   exportInterfaceCasesApi,
+  exportInterfaceCasesJmeterApi,
   exportInterfaceCasesPostmanApi,
   generateInterfaceCasesApi,
   listInterfaceCasesApi,
@@ -356,6 +360,24 @@ async function handleExportPostman() {
     URL.revokeObjectURL(url)
     ElMessage.success(
       '已导出 Postman Collection，导入后配置环境变量 base_url 即可使用',
+    )
+  } catch {
+    // 已由拦截器提示
+  }
+}
+
+async function handleExportJmeter() {
+  if (!projectId.value) return
+  try {
+    const blob = await exportInterfaceCasesJmeterApi(projectId.value)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'interface_test_cases.jmx'
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(
+      '已导出 JMeter 测试计划，导入后修改 base_url 即可运行压测',
     )
   } catch {
     // 已由拦截器提示

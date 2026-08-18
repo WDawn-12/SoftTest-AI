@@ -21,6 +21,7 @@ from app.schemas.interface_test import (
 from app.services.interface_test_service import (
     build_interface_case_out,
     build_interface_out,
+    build_jmeter_test_plan,
     build_postman_collection,
     export_interface_cases_excel,
     run_interface_case_generation,
@@ -342,6 +343,37 @@ def export_interface_cases_postman(
         headers={
             "Content-Disposition": (
                 "attachment; filename=interface_test_cases.postman_collection.json"
+            )
+        },
+    )
+
+
+@router.get(
+    "/interface-cases/export/jmeter",
+    summary="导出接口测试用例为 JMeter 测试计划（.jmx）",
+)
+def export_interface_cases_jmeter(
+    project_id: int,
+    db: DbDep = None,
+    current_user: CurrentUser = None,
+) -> StreamingResponse:
+    """导出项目下全部接口测试用例为 JMeter 测试计划（.jmx）。
+
+    结构：用户自定义变量（base_url）→ 线程组（并发数 = 用例数封顶 10）
+    → 每个用例一个 HTTP Sampler（含 query/body 与状态码断言）
+    → 查看结果树 + 聚合报告监听器。导入 JMeter 后可直接运行。
+    """
+    get_owned_project(db, project_id, current_user)
+    try:
+        content = build_jmeter_test_plan(db, project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        iter([content]),
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": (
+                "attachment; filename=interface_test_cases.jmx"
             )
         },
     )

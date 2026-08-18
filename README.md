@@ -290,6 +290,7 @@ pnpm build   # 产物输出到 dist/
 | DELETE | /api/v1/projects/{project_id}/interface-cases/{case_id} | 删除接口用例 | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/interface-cases/export | 导出接口测试用例 Excel | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/interface-cases/export/postman | 导出 Postman/Apifox Collection JSON（v2.1） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/interface-cases/export/jmeter | 导出 JMeter 测试计划（.jmx，含线程组/断言/监听器） | 创建人/管理员 |
 | GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
 | PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
 | GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
@@ -324,7 +325,7 @@ pnpm build   # 产物输出到 dist/
 
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
 
-**InterfaceTestCase Agent（扩展功能）**：根据接口定义（手动录入或 OpenAPI/Swagger 导入）生成接口测试用例，每个接口覆盖 5 类场景（正常流程、异常流程、边界值、安全测试、参数组合），含请求方法/路径/请求体/预期状态码/优先级；编号按项目顺序自动生成（API0001……），支持编辑删除与 **Excel 导出、Postman/Apifox Collection JSON 导出**（导入第三方工具后配置 `base_url` 环境变量即可直接发请求）；真实模型按接口分批生成避免长输出截断，demo 模式关键词模拟。
+**InterfaceTestCase Agent（扩展功能）**：根据接口定义（手动录入或 OpenAPI/Swagger 导入）生成接口测试用例，每个接口覆盖 5 类场景（正常流程、异常流程、边界值、安全测试、参数组合），含请求方法/路径/请求体/预期状态码/优先级；编号按项目顺序自动生成（API0001……），支持编辑删除与 **Excel 导出、Postman/Apifox Collection JSON 导出、JMeter 测试计划（.jmx）导出**——导入第三方工具后配置 `base_url` 环境变量即可直接发请求/压测；真实模型按接口分批生成避免长输出截断，demo 模式关键词模拟。
 
 ### 9.1 AI 聊天能力
 

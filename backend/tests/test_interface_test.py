@@ -285,6 +285,45 @@ def test_export_interface_cases_postman(client, user_headers):
     assert "预期结果" in get_item["request"]["description"]
 
 
+def test_export_interface_cases_jmeter(client, user_headers):
+    """JMeter .jmx 导出：合法 XML、线程组、HTTP Sampler、断言、用户变量。"""
+    import xml.etree.ElementTree as ET
+
+    pid = _create_project(client, user_headers)
+    _create_interface(client, pid, user_headers, path="/api/users/search")
+    _create_interface(
+        client, pid, user_headers, name="创建用户", method="POST", path="/api/users"
+    )
+    _create_interface(
+        client, pid, user_headers,
+        name="删除用户", method="DELETE", path="/api/users/{id}",
+    )
+    client.post(
+        f"/api/v1/projects/{pid}/interfaces/generate-cases",
+        json={},
+        headers=user_headers,
+    )
+    resp = client.get(
+        f"/api/v1/projects/{pid}/interface-cases/export/jmeter",
+        headers=user_headers,
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/xml")
+    # 合法 XML 且是 jmeterTestPlan
+    root = ET.fromstring(resp.content)
+    assert root.tag == "jmeterTestPlan"
+    # 包含线程组与用户自定义变量
+    text = resp.content.decode("utf-8")
+    assert 'testclass="ThreadGroup"' in text
+    assert "base_url" in text
+    # 15 条用例 → 15 个 HTTP Sampler
+    assert text.count('testclass="HTTPSamplerProxy"') == 15
+    # POST 用例含 JSON body、断言含状态码
+    assert "HTTPSampler.postBodyRaw" in text
+    assert 'testclass="ResponseAssertion"' in text
+    assert "Assertion.response_code" in text
+
+
 def test_interface_permission_isolation(client):
     """用户 B 不能访问用户 A 项目下的接口。"""
     register_user(client, "user_a", "pass12345")

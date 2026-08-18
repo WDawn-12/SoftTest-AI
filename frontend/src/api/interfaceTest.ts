@@ -125,3 +125,11 @@ export function exportInterfaceCasesPostmanApi(projectId: number): Promise<Blob>
     { responseType: 'blob' },
   ) as unknown as Promise<Blob>
 }
+
+// 导出接口用例为 JMeter 测试计划（.jmx）
+export function exportInterfaceCasesJmeterApi(projectId: number): Promise<Blob> {
+  return request.get(
+    `/v1/projects/${projectId}/interface-cases/export/jmeter`,
+    { responseType: 'blob' },
+  ) as unknown as Promise<Blob>
+}

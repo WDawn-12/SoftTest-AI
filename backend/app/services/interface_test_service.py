@@ -1,6 +1,7 @@
 """接口测试业务逻辑：接口管理、接口用例生成与保存。"""
 import json
 import time
+from xml.sax.saxutils import escape as xml_escape
 
 from sqlalchemy.orm import Session
 
@@ -342,6 +343,252 @@ def build_postman_collection(db: Session, project_id: int) -> dict:
         },
         "item": items,
     }
+
+
+def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
+    """构建 JMeter 测试计划（.jmx，XML 格式）。
+
+    结构：TestPlan → 用户自定义变量（base_url）→ ThreadGroup → 每用例一个
+    HTTPSamplerProxy（含 query 参数、JSON body、Response Assertion 状态码断言）
+    → 查看结果树/聚合报告监听器。
+    """
+    cases = (
+        db.query(InterfaceTestCase)
+        .filter(InterfaceTestCase.project_id == project_id)
+        .order_by(InterfaceTestCase.case_no)
+        .all()
+    )
+    if not cases:
+        raise ValueError("该项目还没有接口测试用例，请先生成用例")
+
+    project_name = db.get(Project, project_id).name if db.get(Project, project_id) else f"项目{project_id}"
+    thread_count = max(1, min(len(cases), 10))  # 默认并发数：用例数，封顶 10
+    ramp_time = 5  # 启动时间（秒）
+
+    # 用户自定义变量：base_url（导入后在 jmeter.properties 或此处改为真实地址）
+    variables = _jmx_element(
+        "Arguments",
+        "UserDefinedVariablesGui",
+        "用户自定义变量",
+        (
+            '<collectionProp name="Arguments.arguments">'
+            '<elementProp name="base_url" elementType="Argument">'
+            '<stringProp name="Argument.name">base_url</stringProp>'
+            '<stringProp name="Argument.value">http://localhost:8000</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            "</collectionProp>"
+        ),
+    )
+
+    samplers = []
+    for case in cases:
+        path = case.path or "/"
+        method = case.method or "GET"
+        payload = (case.request_payload or "").strip()
+
+        # query 参数（?a=1&b=2 或 key=value 格式，POST JSON body 除外）
+        arguments = ""
+        if payload and not payload.startswith("{"):
+            params = []
+            query_text = payload.lstrip("?")
+            for pair in query_text.split("&"):
+                pair = pair.strip()
+                if not pair:
+                    continue
+                if "=" in pair:
+                    key, value = pair.split("=", 1)
+                else:
+                    key, value = pair, ""
+                params.append((key, value))
+            arg_items = "".join(
+                '<elementProp name="{k}" elementType="Argument">'
+                '<stringProp name="Argument.name">{k}</stringProp>'
+                '<stringProp name="Argument.value">{v}</stringProp>'
+                '<stringProp name="Argument.metadata">=</stringProp>'
+                "</elementProp>".format(k=xml_escape(k), v=xml_escape(v))
+                for k, v in params
+            )
+            if arg_items:
+                arguments = (
+                    '<collectionProp name="HTTPSampler.arguments">'
+                    f"{arg_items}"
+                    "</collectionProp>"
+                )
+
+        # POST/PUT JSON body
+        body_raw = ""
+        if method in ("POST", "PUT", "PATCH") and payload.startswith("{"):
+            body_raw = (
+                '<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>'
+                '<collectionProp name="HTTPSampler.arguments">'
+                '<elementProp name="" elementType="HTTPArgument">'
+                '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
+                '<stringProp name="Argument.value">{body}</stringProp>'
+                '<stringProp name="Argument.metadata">=</stringProp>'
+                "</elementProp>"
+                "</collectionProp>"
+            ).format(body=xml_escape(payload))
+
+        # 预期状态码断言
+        expected_status = (case.expected_status or "200").strip()
+        assertion = _jmx_element(
+            "ResponseAssertion",
+            "AssertionGui",
+            f"状态码断言 {expected_status}",
+            (
+                '<collectionProp name="Asserion.test_strings">'
+                '<stringProp name="49586">{status}</stringProp>'
+                "</collectionProp>"
+                '<stringProp name="Assertion.custom_message"></stringProp>'
+                '<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>'
+                '<boolProp name="Assertion.assume_success">false</boolProp>'
+                '<intProp name="Assertion.test_type">8</intProp>'
+            ).format(status=xml_escape(expected_status)),
+        )
+
+        sampler_name = f"{case.case_no} {case.title}"
+        sampler = _jmx_element(
+            "HTTPSamplerProxy",
+            "HttpTestSampleGui",
+            sampler_name,
+            (
+                '<stringProp name="HTTPSampler.domain">${{base_url}}</stringProp>'
+                '<stringProp name="HTTPSampler.port"></stringProp>'
+                '<stringProp name="HTTPSampler.protocol">http</stringProp>'
+                '<stringProp name="HTTPSampler.contentEncoding"></stringProp>'
+                '<stringProp name="HTTPSampler.path">{path}</stringProp>'
+                '<stringProp name="HTTPSampler.method">{method}</stringProp>'
+                '<boolProp name="HTTPSampler.followRedirects">true</boolProp>'
+                '<boolProp name="HTTPSampler.autoRedirects">false</boolProp>'
+                '<boolProp name="HTTPSampler.useKeepAlive">true</boolProp>'
+                '<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>'
+                '{arguments}'
+                '{body_raw}'
+            ).format(
+                path=xml_escape(path),
+                method=xml_escape(method),
+                arguments=arguments,
+                body_raw=body_raw,
+            ),
+        )
+        samplers.append(f"{sampler}{assertion}")
+
+    # 监听器：查看结果树 + 聚合报告
+    listeners = (
+        _jmx_element(
+            "ResultCollector",
+            "ViewResultsFullVisualizer",
+            "查看结果树",
+            '<stringProp name="ResultCollector.classname">org.apache.jmeter.visualizers.ViewResultsFullVisualizer</stringProp>'
+            '<boolProp name="ResultCollector.error_logging">false</boolProp>'
+            '<objProp><name>saveConfig</name>'
+            '<value class="SampleSaveConfiguration"><time>true</time>'
+            '<latency>true</latency><timestamp>true</timestamp><success>true</success>'
+            '<label>true</label><code>true</code><message>true</message>'
+            '<threadName>true</threadName><dataType>true</dataType>'
+            '<encoding>false</encoding><assertions>true</assertions><subresults>true</subresults>'
+            '<responseData>false</responseData><samplerData>false</samplerData>'
+            '<xml>false</xml><fieldNames>true</fieldNames><responseHeaders>false</responseHeaders>'
+            '<requestHeaders>false</requestHeaders><responseDataOnError>false</responseDataOnError>'
+            '<saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>'
+            '<assertionsResultsToSave>0</assertionsResultsToSave><bytes>true</bytes>'
+            '<sentBytes>true</sentBytes><url>true</url><threadCounts>true</threadCounts>'
+            '<idleTime>true</idleTime><connectTime>true</connectTime></value></objProp>'
+        ),
+        _jmx_element(
+            "ResultCollector",
+            "StatVisualizer",
+            "聚合报告",
+            '<stringProp name="ResultCollector.classname">org.apache.jmeter.visualizers.StatVisualizer</stringProp>'
+            '<boolProp name="ResultCollector.error_logging">false</boolProp>'
+            '<objProp><name>saveConfig</name>'
+            '<value class="SampleSaveConfiguration"><time>true</time>'
+            '<latency>true</latency><timestamp>true</timestamp><success>true</success>'
+            '<label>true</label><code>true</code><message>true</message>'
+            '<threadName>true</threadName><dataType>true</dataType>'
+            '<encoding>false</encoding><assertions>true</assertions><subresults>true</subresults>'
+            '<responseData>false</responseData><samplerData>false</samplerData>'
+            '<xml>false</xml><fieldNames>true</fieldNames><responseHeaders>false</responseHeaders>'
+            '<requestHeaders>false</requestHeaders><responseDataOnError>false</responseDataOnError>'
+            '<saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>'
+            '<assertionsResultsToSave>0</assertionsResultsToSave><bytes>true</bytes>'
+            '<sentBytes>true</sentBytes><url>true</url><threadCounts>true</threadCounts>'
+            '<idleTime>true</idleTime><connectTime>true</connectTime></value></objProp>'
+        ),
+    )
+
+    thread_group = _jmx_element(
+        "ThreadGroup",
+        "ThreadGroupGui",
+        f"接口测试线程组（{thread_count} 并发）",
+        (
+            '<stringProp name="ThreadGroup.on_sample_error">continue</stringProp>'
+            '<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="循环控制器" enabled="true">'
+            '<boolProp name="LoopController.continue_forever">false</boolProp>'
+            '<stringProp name="LoopController.loops">1</stringProp>'
+            "</elementProp>"
+            f'<stringProp name="ThreadGroup.num_threads">{thread_count}</stringProp>'
+            f'<stringProp name="ThreadGroup.ramp_time">{ramp_time}</stringProp>'
+            '<boolProp name="ThreadGroup.scheduler">false</boolProp>'
+            '<stringProp name="ThreadGroup.duration"></stringProp>'
+            '<stringProp name="ThreadGroup.delay"></stringProp>'
+        ),
+    )
+
+    test_plan = _jmx_element(
+        "TestPlan",
+        "TestPlanGui",
+        f"接口测试计划（{project_name}）",
+        (
+            '<stringProp name="TestPlan.comments">由 AITestAgent 接口测试模块生成，'
+            '包含 5 类接口用例与状态码断言。请将「用户自定义变量」中的 base_url 改为被测环境地址。</stringProp>'
+            '<boolProp name="TestPlan.functional_mode">false</boolProp>'
+            '<boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>'
+            '<boolProp name="TestPlan.serialize_threadgroups">false</boolProp>'
+            '<elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">'
+            '<collectionProp name="Arguments.arguments">'
+            '<elementProp name="base_url" elementType="Argument">'
+            '<stringProp name="Argument.name">base_url</stringProp>'
+            '<stringProp name="Argument.value">http://localhost:8000</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            "</collectionProp>"
+            "</elementProp>"
+        ),
+    )
+
+    # 组装 hashTree
+    sampler_tree = "".join(
+        f"<hashTree>{s}</hashTree>" for s in samplers
+    )
+    listener_tree = "".join(f"<hashTree>{l}</hashTree>" for l in listeners)
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.2">'
+        "<hashTree>"
+        f"{test_plan}"
+        "<hashTree>"
+        f"{variables}"
+        "<hashTree/>"
+        f"{thread_group}"
+        "<hashTree>"
+        f"{sampler_tree}"
+        f"{listener_tree}"
+        "</hashTree>"
+        "</hashTree>"
+        "</hashTree>"
+        "</jmeterTestPlan>"
+    )
+    return xml.encode("utf-8")
+
+
+def _jmx_element(testclass: str, guiclass: str, testname: str, content: str) -> str:
+    """构建一个 JMeter 元素节点（enabled=true）。"""
+    return (
+        f'<{testclass} guiclass="{guiclass}" testclass="{testclass}" '
+        f'testname="{xml_escape(testname)}" enabled="true">{content}</{testclass}>'
+    )
 
 
 # ---------- 工具函数 ----------
