@@ -8,6 +8,7 @@ from app.api.v1 import (
     generator,
     health,
     interface_test,
+    perf_scenario,
     projects,
     requirements,
     systems,
@@ -32,3 +33,4 @@ api_router.include_router(system.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(generator.router)
 api_router.include_router(interface_test.router)
+api_router.include_router(perf_scenario.router)

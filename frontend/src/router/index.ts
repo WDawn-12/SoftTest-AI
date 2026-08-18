@@ -76,6 +76,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '接口测试用例' },
       },
       {
+        path: 'perf-scenarios',
+        name: 'PerfScenario',
+        component: () => import('@/views/perf/PerfScenarioView.vue'),
+        meta: { title: '性能测试场景' },
+      },
+      {
         path: 'chat',
         name: 'Chat',
         component: () => import('@/views/chat/ChatView.vue'),

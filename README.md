@@ -71,7 +71,8 @@ graph LR
 | 测试点管理 | TestPoint Agent 生成六类测试点（正常/异常/边界/安全/兼容/性能）+ 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
 | 接口管理 | 手动录入 / OpenAPI（Swagger）JSON 导入接口，接口 CRUD | ✅ 已完成 |
-| 接口测试用例 | InterfaceTestCase Agent 生成五类接口用例（正常/异常/边界/安全/参数组合）+ 编辑删除 + Excel 导出 | ✅ 已完成 |
+| 接口测试用例 | InterfaceTestCase Agent 生成五类接口用例（正常/异常/边界/安全/参数组合）+ 编辑删除 + Excel/Postman/JMeter 导出 | ✅ 已完成 |
+| 性能测试场景 | 场景化配置（并发/循环/ramp-up/思考时间）+ 一键导出 JMeter 压测脚本 | ✅ 已完成 |
 | AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
 | 系统设置 | 模型配置、API Key、Prompt 模板、操作/AI 日志（管理员） | ✅ 已完成 |
 
@@ -291,6 +292,11 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id}/interface-cases/export | 导出接口测试用例 Excel | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/interface-cases/export/postman | 导出 Postman/Apifox Collection JSON（v2.1） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/interface-cases/export/jmeter | 导出 JMeter 测试计划（.jmx，含线程组/断言/监听器） | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/perf-scenarios | 新建性能测试场景（并发/循环/ramp-up/思考时间） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/perf-scenarios | 性能场景列表（分页 + 搜索） | 创建人/管理员 |
+| PATCH | /api/v1/projects/{project_id}/perf-scenarios/{id} | 编辑性能场景 | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/perf-scenarios/{id} | 删除性能场景 | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/perf-scenarios/{id}/export/jmeter | 导出性能场景 JMeter 压测脚本（线程组参数按场景配置） | 创建人/管理员 |
 | GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
 | PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
 | GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
@@ -326,6 +332,8 @@ pnpm build   # 产物输出到 dist/
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
 
 **InterfaceTestCase Agent（扩展功能）**：根据接口定义（手动录入或 OpenAPI/Swagger 导入）生成接口测试用例，每个接口覆盖 5 类场景（正常流程、异常流程、边界值、安全测试、参数组合），含请求方法/路径/请求体/预期状态码/优先级；编号按项目顺序自动生成（API0001……），支持编辑删除与 **Excel 导出、Postman/Apifox Collection JSON 导出、JMeter 测试计划（.jmx）导出**——导入第三方工具后配置 `base_url` 环境变量即可直接发请求/压测；真实模型按接口分批生成避免长输出截断，demo 模式关键词模拟。
+
+**性能测试场景（扩展功能）**：在接口用例之上新增场景化压测配置——每个场景可设定**并发用户数、循环次数、ramp-up 启动时间、思考时间（Constant Timer）、目标主机/端口**，并可选择压测的接口子集（空 = 项目全部接口）；一键导出 JMeter 压测脚本（线程组参数按场景配置，含状态码断言与查看结果树/聚合报告监听器），覆盖**冒烟 → 负载 → 压力测试**场景；配合测试点的 performance 第六类（性能测试设计），打通「AI 设计性能测试 → JMeter 执行压测」闭环。
 
 ### 9.1 AI 聊天能力
 
@@ -387,7 +395,7 @@ pytest -q                     # 简洁输出
 pytest tests/test_auth.py -v  # 运行单个文件
 ```
 
-- 测试套件：**78 个用例**（认证、项目、需求、测试点、测试用例、SSE 流式、Agent 工具调用、接口测试等）
+- 测试套件：**87 个用例**（认证、项目、需求、测试点、测试用例、SSE 流式、Agent 工具调用、接口测试、性能场景等）
 - 覆盖率：`pytest.ini` 内置 `--cov=app`，运行后输出行覆盖率报告并生成 `coverage.xml`
 - 当前覆盖率：**86%**（徽章见仓库顶部，CI 每次运行自动更新）
 

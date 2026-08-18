@@ -9,6 +9,7 @@ from app.agents.llm import get_llm_provider
 from app.agents.interface_testcase_agent import InterfaceTestCaseAgent
 from app.models.interface import Interface
 from app.models.interface_test_case import InterfaceTestCase
+from app.models.perf_scenario import PerfScenario
 from app.models.project import Project
 from app.schemas.interface_test import InterfaceCaseOut, InterfaceOut
 from app.services.ai_log_service import log_ai_call
@@ -345,174 +346,135 @@ def build_postman_collection(db: Session, project_id: int) -> dict:
     }
 
 
-def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
-    """构建 JMeter 测试计划（.jmx，XML 格式）。
+def _build_case_sampler(case: InterfaceTestCase) -> str:
+    """构建单个接口用例的 JMeter HTTPSamplerProxy + 断言（含官方树结构）。
 
-    结构：TestPlan → 用户自定义变量（base_url）→ ThreadGroup → 每用例一个
-    HTTPSamplerProxy（含 query 参数、JSON body、Response Assertion 状态码断言）
-    → 查看结果树/聚合报告监听器。
+    返回：sampler + <hashTree>断言<hashTree/></hashTree>（JMeter 约定每个
+    元素节点后必须紧跟 <hashTree> 子容器）。
     """
-    cases = (
-        db.query(InterfaceTestCase)
-        .filter(InterfaceTestCase.project_id == project_id)
-        .order_by(InterfaceTestCase.case_no)
-        .all()
-    )
-    if not cases:
-        raise ValueError("该项目还没有接口测试用例，请先生成用例")
+    path = case.path or "/"
+    method = case.method or "GET"
+    payload = (case.request_payload or "").strip()
 
-    project_name = db.get(Project, project_id).name if db.get(Project, project_id) else f"项目{project_id}"
-    thread_count = max(1, min(len(cases), 10))  # 默认并发数：用例数，封顶 10
-    ramp_time = 5  # 启动时间（秒）
-
-    # 用户自定义变量：base_url（仅主机名/IP，不含协议和端口）+ base_port（端口）
-    # 注意：JMeter domain 字段只接受纯主机名/IP，不能含 http:// 或 :
-    # 注意：guiclass 必须用 ArgumentsPanel（UserDefinedVariablesGui 是内部类名，
-    # 写进 jmx 会导致 JMeter 加载时 getGui() 返回 null → clearGui() 空指针）
-    variables = _jmx_element(
-        "Arguments",
-        "ArgumentsPanel",
-        "用户自定义变量",
-        (
-            '<collectionProp name="Arguments.arguments">'
-            '<elementProp name="base_url" elementType="Argument">'
-            '<stringProp name="Argument.name">base_url</stringProp>'
-            '<stringProp name="Argument.value">localhost</stringProp>'
+    # query 参数（?a=1&b=2 或 key=value 格式，POST JSON body 除外）
+    # JMeter 官方格式：HTTPArgument 需包裹在 HTTPsampler.Arguments 容器内
+    arguments = ""
+    if payload and not payload.startswith("{"):
+        params = []
+        query_text = payload.lstrip("?")
+        for pair in query_text.split("&"):
+            pair = pair.strip()
+            if not pair:
+                continue
+            if "=" in pair:
+                key, value = pair.split("=", 1)
+            else:
+                key, value = pair, ""
+            params.append((key, value))
+        arg_items = "".join(
+            '<elementProp name="{k}" elementType="HTTPArgument">'
+            '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
+            '<stringProp name="Argument.value">{v}</stringProp>'
             '<stringProp name="Argument.metadata">=</stringProp>'
-            "</elementProp>"
-            '<elementProp name="base_port" elementType="Argument">'
-            '<stringProp name="Argument.name">base_port</stringProp>'
-            '<stringProp name="Argument.value">8000</stringProp>'
+            '<boolProp name="HTTPArgument.use_equals">true</boolProp>'
+            '<stringProp name="Argument.name">{k}</stringProp>'
+            "</elementProp>".format(k=xml_escape(k), v=xml_escape(v))
+            for k, v in params
+        )
+        if arg_items:
+            arguments = (
+                '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
+                'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
+                'testname="参数" enabled="true">'
+                '<collectionProp name="Arguments.arguments">'
+                f"{arg_items}"
+                "</collectionProp>"
+                "</elementProp>"
+            )
+
+    # POST/PUT JSON body（JMeter raw body 也是 HTTPArgument 容器）
+    body_raw = ""
+    if method in ("POST", "PUT", "PATCH") and payload.startswith("{"):
+        body_raw = (
+            '<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>'
+            '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
+            'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
+            'testname="请求体" enabled="true">'
+            '<collectionProp name="Arguments.arguments">'
+            '<elementProp name="" elementType="HTTPArgument">'
+            '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
+            '<stringProp name="Argument.value">{body}</stringProp>'
             '<stringProp name="Argument.metadata">=</stringProp>'
             "</elementProp>"
             "</collectionProp>"
+            "</elementProp>"
+        ).format(body=xml_escape(payload))
+
+    # 预期状态码断言（支持多值，如 "400/422" → 拆成多个 pattern，OR 语义）
+    expected_status = (case.expected_status or "200").strip()
+    status_list = [
+        s.strip() for s in expected_status.replace("，", "/").split("/") if s.strip()
+    ]
+    if not status_list:
+        status_list = ["200"]
+    status_items = "".join(
+        f'<stringProp name="49586">{xml_escape(s)}</stringProp>' for s in status_list
+    )
+    assertion = _jmx_element(
+        "ResponseAssertion",
+        "AssertionGui",
+        f"状态码断言 {expected_status}",
+        (
+            '<collectionProp name="Asserion.test_strings">'
+            f"{status_items}"
+            "</collectionProp>"
+            '<stringProp name="Assertion.custom_message"></stringProp>'
+            '<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>'
+            '<boolProp name="Assertion.assume_success">false</boolProp>'
+            '<intProp name="Assertion.test_type">8</intProp>'
         ),
     )
 
-    samplers = []
-    for case in cases:
-        path = case.path or "/"
-        method = case.method or "GET"
-        payload = (case.request_payload or "").strip()
+    sampler_name = f"{case.case_no} {case.title}"
+    sampler = _jmx_element(
+        "HTTPSamplerProxy",
+        "HttpTestSampleGui",
+        sampler_name,
+        (
+            '<stringProp name="HTTPSampler.domain">${{base_url}}</stringProp>'
+            '<stringProp name="HTTPSampler.port">${{base_port}}</stringProp>'
+            '<stringProp name="HTTPSampler.protocol">http</stringProp>'
+            '<stringProp name="HTTPSampler.contentEncoding"></stringProp>'
+            '<stringProp name="HTTPSampler.path">{path}</stringProp>'
+            '<stringProp name="HTTPSampler.method">{method}</stringProp>'
+            '<boolProp name="HTTPSampler.followRedirects">true</boolProp>'
+            '<boolProp name="HTTPSampler.autoRedirects">false</boolProp>'
+            '<boolProp name="HTTPSampler.useKeepAlive">true</boolProp>'
+            '<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>'
+            '<stringProp name="HTTPSampler.embedded_url_re"></stringProp>'
+            '<stringProp name="HTTPSampler.connect_timeout"></stringProp>'
+            '<stringProp name="HTTPSampler.response_timeout"></stringProp>'
+            '{arguments}'
+            '{body_raw}'
+        ).format(
+            path=xml_escape(path),
+            method=xml_escape(method),
+            arguments=arguments,
+            body_raw=body_raw,
+        ),
+    )
+    # JMeter 树结构：Sampler → <hashTree> → Assertion → <hashTree/>（空）
+    return (
+        f"{sampler}"
+        "<hashTree>"
+        f"{assertion}"
+        "<hashTree/>"
+        "</hashTree>"
+    )
 
-        # query 参数（?a=1&b=2 或 key=value 格式，POST JSON body 除外）
-        # JMeter 官方格式：HTTPArgument 需包裹在 HTTPsampler.Arguments 容器内
-        arguments = ""
-        if payload and not payload.startswith("{"):
-            params = []
-            query_text = payload.lstrip("?")
-            for pair in query_text.split("&"):
-                pair = pair.strip()
-                if not pair:
-                    continue
-                if "=" in pair:
-                    key, value = pair.split("=", 1)
-                else:
-                    key, value = pair, ""
-                params.append((key, value))
-            arg_items = "".join(
-                '<elementProp name="{k}" elementType="HTTPArgument">'
-                '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
-                '<stringProp name="Argument.value">{v}</stringProp>'
-                '<stringProp name="Argument.metadata">=</stringProp>'
-                '<boolProp name="HTTPArgument.use_equals">true</boolProp>'
-                '<stringProp name="Argument.name">{k}</stringProp>'
-                "</elementProp>".format(k=xml_escape(k), v=xml_escape(v))
-                for k, v in params
-            )
-            if arg_items:
-                arguments = (
-                    '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
-                    'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
-                    'testname="参数" enabled="true">'
-                    '<collectionProp name="Arguments.arguments">'
-                    f"{arg_items}"
-                    "</collectionProp>"
-                    "</elementProp>"
-                )
 
-        # POST/PUT JSON body（JMeter raw body 也是 HTTPArgument 容器）
-        body_raw = ""
-        if method in ("POST", "PUT", "PATCH") and payload.startswith("{"):
-            body_raw = (
-                '<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>'
-                '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
-                'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
-                'testname="请求体" enabled="true">'
-                '<collectionProp name="Arguments.arguments">'
-                '<elementProp name="" elementType="HTTPArgument">'
-                '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
-                '<stringProp name="Argument.value">{body}</stringProp>'
-                '<stringProp name="Argument.metadata">=</stringProp>'
-                "</elementProp>"
-                "</collectionProp>"
-                "</elementProp>"
-            ).format(body=xml_escape(payload))
-
-        # 预期状态码断言（支持多值，如 "400/422" → 拆成多个 pattern，OR 语义）
-        expected_status = (case.expected_status or "200").strip()
-        status_list = [
-            s.strip() for s in expected_status.replace("，", "/").split("/") if s.strip()
-        ]
-        if not status_list:
-            status_list = ["200"]
-        status_items = "".join(
-            f'<stringProp name="49586">{xml_escape(s)}</stringProp>' for s in status_list
-        )
-        assertion = _jmx_element(
-            "ResponseAssertion",
-            "AssertionGui",
-            f"状态码断言 {expected_status}",
-            (
-                '<collectionProp name="Asserion.test_strings">'
-                f"{status_items}"
-                "</collectionProp>"
-                '<stringProp name="Assertion.custom_message"></stringProp>'
-                '<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>'
-                '<boolProp name="Assertion.assume_success">false</boolProp>'
-                '<intProp name="Assertion.test_type">8</intProp>'
-            ),
-        )
-
-        sampler_name = f"{case.case_no} {case.title}"
-        sampler = _jmx_element(
-            "HTTPSamplerProxy",
-            "HttpTestSampleGui",
-            sampler_name,
-            (
-                '<stringProp name="HTTPSampler.domain">${{base_url}}</stringProp>'
-                '<stringProp name="HTTPSampler.port">${{base_port}}</stringProp>'
-                '<stringProp name="HTTPSampler.protocol">http</stringProp>'
-                '<stringProp name="HTTPSampler.contentEncoding"></stringProp>'
-                '<stringProp name="HTTPSampler.path">{path}</stringProp>'
-                '<stringProp name="HTTPSampler.method">{method}</stringProp>'
-                '<boolProp name="HTTPSampler.followRedirects">true</boolProp>'
-                '<boolProp name="HTTPSampler.autoRedirects">false</boolProp>'
-                '<boolProp name="HTTPSampler.useKeepAlive">true</boolProp>'
-                '<boolProp name="HTTPSampler.DO_MULTIPART_POST">false</boolProp>'
-                '<stringProp name="HTTPSampler.embedded_url_re"></stringProp>'
-                '<stringProp name="HTTPSampler.connect_timeout"></stringProp>'
-                '<stringProp name="HTTPSampler.response_timeout"></stringProp>'
-                '{arguments}'
-                '{body_raw}'
-            ).format(
-                path=xml_escape(path),
-                method=xml_escape(method),
-                arguments=arguments,
-                body_raw=body_raw,
-            ),
-        )
-        # JMeter 树结构：每个元素节点后必须紧跟 <hashTree> 子容器
-        # Sampler → <hashTree> → Assertion → <hashTree/>（空）
-        samplers.append(
-            f"{sampler}"
-            "<hashTree>"
-            f"{assertion}"
-            "<hashTree/>"
-            "</hashTree>"
-        )
-
-    # 监听器：查看结果树 + 聚合报告
+def _build_jmeter_listeners() -> str:
+    """构建查看结果树 + 聚合报告监听器（各后跟空 <hashTree/>）。"""
     listeners = (
         _jmx_element(
             "ResultCollector",
@@ -533,6 +495,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             '<assertionsResultsToSave>0</assertionsResultsToSave><bytes>true</bytes>'
             '<sentBytes>true</sentBytes><url>true</url><threadCounts>true</threadCounts>'
             '<idleTime>true</idleTime><connectTime>true</connectTime></value></objProp>'
+            '<stringProp name="filename"></stringProp>'
         ),
         _jmx_element(
             "ResultCollector",
@@ -553,8 +516,58 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             '<assertionsResultsToSave>0</assertionsResultsToSave><bytes>true</bytes>'
             '<sentBytes>true</sentBytes><url>true</url><threadCounts>true</threadCounts>'
             '<idleTime>true</idleTime><connectTime>true</connectTime></value></objProp>'
+            '<stringProp name="filename"></stringProp>'
         ),
     )
+    return "".join(f"{l}<hashTree/>" for l in listeners)
+
+
+def _build_jmeter_variables(base_url: str = "localhost", base_port: str = "8000") -> str:
+    """构建用户自定义变量（base_url/base_port）。"""
+    return _jmx_element(
+        "Arguments",
+        "ArgumentsPanel",
+        "用户自定义变量",
+        (
+            '<collectionProp name="Arguments.arguments">'
+            '<elementProp name="base_url" elementType="Argument">'
+            '<stringProp name="Argument.name">base_url</stringProp>'
+            '<stringProp name="Argument.value">{url}</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            '<elementProp name="base_port" elementType="Argument">'
+            '<stringProp name="Argument.name">base_port</stringProp>'
+            '<stringProp name="Argument.value">{port}</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            "</collectionProp>"
+        ).format(url=xml_escape(base_url), port=xml_escape(base_port)),
+    )
+
+
+def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
+    """构建 JMeter 测试计划（.jmx，XML 格式）。
+
+    结构：TestPlan → 用户自定义变量（base_url）→ ThreadGroup → 每用例一个
+    HTTPSamplerProxy（含 query 参数、JSON body、Response Assertion 状态码断言）
+    → 查看结果树/聚合报告监听器。
+    """
+    cases = (
+        db.query(InterfaceTestCase)
+        .filter(InterfaceTestCase.project_id == project_id)
+        .order_by(InterfaceTestCase.case_no)
+        .all()
+    )
+    if not cases:
+        raise ValueError("该项目还没有接口测试用例，请先生成用例")
+
+    project_name = db.get(Project, project_id).name if db.get(Project, project_id) else f"项目{project_id}"
+    thread_count = max(1, min(len(cases), 10))  # 默认并发数：用例数，封顶 10
+    ramp_time = 5  # 启动时间（秒）
+
+    variables = _build_jmeter_variables()
+    samplers = [_build_case_sampler(c) for c in cases]
+    listener_tree = _build_jmeter_listeners()
 
     thread_group = _jmx_element(
         "ThreadGroup",
@@ -604,10 +617,6 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
     )
 
     # 组装 hashTree（JMeter 约定：每个元素节点后紧跟 <hashTree> 子容器）
-    # samplers 每项已是 sampler + <hashTree>assertion<hashTree/></hashTree>，直接拼接
-    sampler_tree = "".join(samplers)
-    # listeners 每个后跟空 <hashTree/>
-    listener_tree = "".join(f"{l}<hashTree/>" for l in listeners)
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">'
@@ -618,7 +627,134 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
         "<hashTree/>"
         f"{thread_group}"
         "<hashTree>"
-        f"{sampler_tree}"
+        f"{''.join(samplers)}"
+        f"{listener_tree}"
+        "</hashTree>"
+        "</hashTree>"
+        "</hashTree>"
+        "</jmeterTestPlan>"
+    )
+    return xml.encode("utf-8")
+
+
+def build_perf_jmeter_test_plan(db: Session, scenario_id: int) -> bytes:
+    """按性能场景配置构建 JMeter 压测测试计划（.jmx）。
+
+    与普通导出的区别：
+    - 线程组参数来自场景（并发数/循环次数/ramp-up）
+    - 用户变量 base_url/base_port 来自场景目标地址
+    - 场景可指定压测的接口子集（interface_ids，空 = 全部）
+    - 增加 Constant Timer 模拟思考时间
+    """
+    scenario = db.get(PerfScenario, scenario_id)
+    if not scenario:
+        raise ValueError("性能场景不存在")
+
+    project = db.get(Project, scenario.project_id)
+    project_name = project.name if project else f"项目{scenario.project_id}"
+
+    # 场景选中的接口 → 对应接口用例（空 = 项目全部接口）
+    query = db.query(InterfaceTestCase).filter(
+        InterfaceTestCase.project_id == scenario.project_id
+    )
+    if scenario.interface_ids:
+        ids = json.loads(scenario.interface_ids) if isinstance(
+            scenario.interface_ids, str
+        ) else scenario.interface_ids
+        if ids:
+            # 仅取选中接口的用例
+            query = query.filter(InterfaceTestCase.interface_id.in_(ids))
+    cases = query.order_by(InterfaceTestCase.case_no).all()
+    if not cases:
+        raise ValueError(
+            "该场景没有可压测的接口用例（请先为接口生成用例，或调整场景选中的接口）"
+        )
+
+    thread_count = max(1, scenario.thread_count or 50)
+    loop_count = max(1, scenario.loop_count or 10)
+    ramp_time = max(1, scenario.ramp_up or 10)
+    think_time_ms = max(0, scenario.think_time_ms or 0)
+
+    variables = _build_jmeter_variables(
+        base_url=scenario.base_url or "localhost",
+        base_port=scenario.base_port or "8000",
+    )
+    samplers = [_build_case_sampler(c) for c in cases]
+    listener_tree = _build_jmeter_listeners()
+
+    # 思考时间：Constant Timer（JMeter 官方格式，作用于线程组内全部 sampler）
+    think_timer = ""
+    if think_time_ms > 0:
+        think_timer = (
+            _jmx_element(
+                "ConstantTimer",
+                "ConstantTimerGui",
+                f"思考时间（{think_time_ms}ms）",
+                f'<stringProp name="ConstantTimer.delay">{think_time_ms}</stringProp>',
+            )
+            + "<hashTree/>"
+        )
+
+    thread_group = _jmx_element(
+        "ThreadGroup",
+        "ThreadGroupGui",
+        f"压测线程组（{thread_count} 并发 × {loop_count} 次）",
+        (
+            '<stringProp name="ThreadGroup.on_sample_error">continue</stringProp>'
+            '<elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="循环控制器" enabled="true">'
+            '<boolProp name="LoopController.continue_forever">false</boolProp>'
+            f'<stringProp name="LoopController.loops">{loop_count}</stringProp>'
+            "</elementProp>"
+            f'<stringProp name="ThreadGroup.num_threads">{thread_count}</stringProp>'
+            f'<stringProp name="ThreadGroup.ramp_time">{ramp_time}</stringProp>'
+            '<boolProp name="ThreadGroup.scheduler">false</boolProp>'
+            '<stringProp name="ThreadGroup.duration"></stringProp>'
+            '<stringProp name="ThreadGroup.delay"></stringProp>'
+            '<boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>'
+        ),
+    )
+
+    test_plan = _jmx_element(
+        "TestPlan",
+        "TestPlanGui",
+        f"性能测试场景（{scenario.name}）",
+        (
+            f'<stringProp name="TestPlan.comments">由 AITestAgent 性能测试场景生成：'
+            f'{thread_count} 并发、循环 {loop_count} 次、ramp-up {ramp_time}s、思考时间 {think_time_ms}ms。'
+            '目标地址在「用户自定义变量」的 base_url / base_port 中配置。</stringProp>'
+            '<boolProp name="TestPlan.functional_mode">false</boolProp>'
+            '<boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>'
+            '<boolProp name="TestPlan.serialize_threadgroups">false</boolProp>'
+            '<elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="用户定义的变量" enabled="true">'
+            '<collectionProp name="Arguments.arguments">'
+            '<elementProp name="base_url" elementType="Argument">'
+            '<stringProp name="Argument.name">base_url</stringProp>'
+            f'<stringProp name="Argument.value">{xml_escape(scenario.base_url or "localhost")}</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            '<elementProp name="base_port" elementType="Argument">'
+            '<stringProp name="Argument.name">base_port</stringProp>'
+            f'<stringProp name="Argument.value">{xml_escape(scenario.base_port or "8000")}</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            "</collectionProp>"
+            "</elementProp>"
+            '<stringProp name="TestPlan.user_define_classpath"></stringProp>'
+        ),
+    )
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">'
+        "<hashTree>"
+        f"{test_plan}"
+        "<hashTree>"
+        f"{variables}"
+        "<hashTree/>"
+        f"{thread_group}"
+        "<hashTree>"
+        f"{think_timer}"
+        f"{''.join(samplers)}"
         f"{listener_tree}"
         "</hashTree>"
         "</hashTree>"

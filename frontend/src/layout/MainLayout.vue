@@ -56,6 +56,7 @@ import {
   ArrowDown,
   ChatDotRound,
   Connection,
+  DataLine,
   Document,
   Expand,
   Fold,
@@ -84,6 +85,7 @@ const menuItems = [
   { path: '/test-cases', title: '测试用例管理', icon: Document },
   { path: '/interfaces', title: '接口管理', icon: Connection },
   { path: '/interface-cases', title: '接口测试用例', icon: Tickets },
+  { path: '/perf-scenarios', title: '性能测试场景', icon: DataLine },
   { path: '/chat', title: 'AI 聊天助手', icon: ChatDotRound },
   { path: '/settings', title: '系统设置', icon: Setting },
 ]
