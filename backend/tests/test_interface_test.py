@@ -350,6 +350,27 @@ def test_export_interface_cases_jmeter(client, user_headers):
     assert "TestPlan.user_define_classpath" in text
     assert "ThreadGroup.same_user_on_next_iteration" in text
     assert "HTTPSampler.response_timeout" in text
+    # 防回归：JMeter domain 字段不能含协议或端口（否则 MalformedURLException）
+    # 用户自定义变量应是 base_url=主机名 + base_port=端口，两个变量分开放
+    import re as _re2
+
+    base_url_values = _re2.findall(
+        r'name="base_url"[^>]*>\s*<stringProp name="Argument\.value">([^<]+)</stringProp>',
+        text,
+    )
+    base_url_values += _re2.findall(
+        r'name="Argument\.value">([^<]+)</stringProp>\s*<stringProp name="Argument\.metadata">=</stringProp>\s*</elementProp>\s*<elementProp name="base_port"',
+        text,
+    )
+    assert base_url_values, "未找到 base_url 变量定义"
+    for val in base_url_values:
+        assert not val.startswith("http"), f"base_url 不应含协议: {val}"
+        assert ":" not in val, f"base_url 不应含端口: {val}"
+    # 所有 sampler（数量 = HTTP Sampler 计数）都应引用 ${base_port}
+    sampler_count = text.count('testclass="HTTPSamplerProxy"')
+    assert text.count('${base_port}') >= sampler_count, (
+        f"sampler 端口应全部引用 ${{base_port}}（{sampler_count} 个）"
+    )
 
 
 def test_interface_permission_isolation(client):

@@ -365,7 +365,8 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
     thread_count = max(1, min(len(cases), 10))  # 默认并发数：用例数，封顶 10
     ramp_time = 5  # 启动时间（秒）
 
-    # 用户自定义变量：base_url（导入后在 jmeter.properties 或此处改为真实地址）
+    # 用户自定义变量：base_url（仅主机名/IP，不含协议和端口）+ base_port（端口）
+    # 注意：JMeter domain 字段只接受纯主机名/IP，不能含 http:// 或 :
     # 注意：guiclass 必须用 ArgumentsPanel（UserDefinedVariablesGui 是内部类名，
     # 写进 jmx 会导致 JMeter 加载时 getGui() 返回 null → clearGui() 空指针）
     variables = _jmx_element(
@@ -376,7 +377,12 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             '<collectionProp name="Arguments.arguments">'
             '<elementProp name="base_url" elementType="Argument">'
             '<stringProp name="Argument.name">base_url</stringProp>'
-            '<stringProp name="Argument.value">http://localhost:8000</stringProp>'
+            '<stringProp name="Argument.value">localhost</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            '<elementProp name="base_port" elementType="Argument">'
+            '<stringProp name="Argument.name">base_port</stringProp>'
+            '<stringProp name="Argument.value">8000</stringProp>'
             '<stringProp name="Argument.metadata">=</stringProp>'
             "</elementProp>"
             "</collectionProp>"
@@ -467,7 +473,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             sampler_name,
             (
                 '<stringProp name="HTTPSampler.domain">${{base_url}}</stringProp>'
-                '<stringProp name="HTTPSampler.port"></stringProp>'
+                '<stringProp name="HTTPSampler.port">${{base_port}}</stringProp>'
                 '<stringProp name="HTTPSampler.protocol">http</stringProp>'
                 '<stringProp name="HTTPSampler.contentEncoding"></stringProp>'
                 '<stringProp name="HTTPSampler.path">{path}</stringProp>'
@@ -567,7 +573,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
         f"接口测试计划（{project_name}）",
         (
             '<stringProp name="TestPlan.comments">由 AITestAgent 接口测试模块生成，'
-            '包含 5 类接口用例与状态码断言。请将「用户自定义变量」中的 base_url 改为被测环境地址。</stringProp>'
+            '包含 5 类接口用例与状态码断言。请将「用户自定义变量」中的 base_url 改为被测环境主机名/IP（不要含 http:// 或端口），base_port 改为端口号。</stringProp>'
             '<boolProp name="TestPlan.functional_mode">false</boolProp>'
             '<boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>'
             '<boolProp name="TestPlan.serialize_threadgroups">false</boolProp>'
@@ -575,7 +581,12 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
             '<collectionProp name="Arguments.arguments">'
             '<elementProp name="base_url" elementType="Argument">'
             '<stringProp name="Argument.name">base_url</stringProp>'
-            '<stringProp name="Argument.value">http://localhost:8000</stringProp>'
+            '<stringProp name="Argument.value">localhost</stringProp>'
+            '<stringProp name="Argument.metadata">=</stringProp>'
+            "</elementProp>"
+            '<elementProp name="base_port" elementType="Argument">'
+            '<stringProp name="Argument.name">base_port</stringProp>'
+            '<stringProp name="Argument.value">8000</stringProp>'
             '<stringProp name="Argument.metadata">=</stringProp>'
             "</elementProp>"
             "</collectionProp>"
