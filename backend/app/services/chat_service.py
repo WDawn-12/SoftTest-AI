@@ -170,6 +170,9 @@ def stream_build_reply(
             # 工具结果已生成回复：分块流式输出（打字机效果）
             pieces = list(_chunk_text(tool_reply, size=16))
             reply_content = tool_reply.strip()
+            for piece in pieces:
+                yield "delta", {"content": piece}
+                time.sleep(0.01)
         else:
             pieces = []
             reply_content = ""

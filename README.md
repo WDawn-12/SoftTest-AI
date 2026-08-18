@@ -1,5 +1,16 @@
 # AITestAgent —— 基于 AI Agent 的软件测试辅助平台
 
+<div align="center">
+
+![Backend Tests](https://img.shields.io/badge/tests-65%20passed-brightgreen)
+![Coverage](docs/badges/coverage.svg)
+![Frontend Tests](https://img.shields.io/badge/vitest-passing-brightgreen)
+![Vue 3](https://img.shields.io/badge/Vue-3.5-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.141-teal)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+</div>
+
 ## 1. 项目简介
 
 本平台面向软件测试人员，实现以下核心流程：
@@ -13,6 +24,8 @@
 | Requirement Agent | 解析需求文档，提取功能模块与需求摘要 |
 | TestPoint Agent | 基于解析结果生成测试点 |
 | TestCase Agent | 基于测试点生成完整测试用例 |
+
+> 聊天助手支持 **SSE 流式输出（打字机效果）** 与 **Agent 工具调用**（`generate_test_data` / `get_project_knowledge`），详见 [9.1 AI 聊天能力](#91-ai-聊天能力)。
 
 ## 2. 技术栈
 
@@ -69,11 +82,13 @@ AITestAgent/
 │   │   ├── main.py             # 应用入口
 │   │   ├── core/               # 配置（config.py）
 │   │   ├── db/                 # 数据库引擎与会话
-│   │   ├── models/             # ORM 模型（7 张表）
-│   │   ├── schemas/            # Pydantic 数据模型（后续阶段）
-│   │   ├── services/           # 业务逻辑层（后续阶段）
-│   │   ├── agents/             # AI Agent 层（后续阶段）
+│   │   ├── models/             # ORM 模型（10 张表）
+│   │   ├── schemas/            # Pydantic 数据模型
+│   │   ├── services/           # 业务逻辑层（含 SSE、聊天、测试数据生成）
+│   │   ├── agents/             # AI Agent 层（Requirement/TestPoint/TestCase/Chat）
 │   │   └── api/v1/             # API v1 路由
+│   ├── tests/                  # pytest 测试套件（65 用例）
+│   ├── pytest.ini              # 测试配置（含覆盖率）
 │   ├── requirements.txt
 │   ├── .env.example
 │   └── Dockerfile
@@ -82,14 +97,20 @@ AITestAgent/
 │   │   ├── router/             # 路由配置
 │   │   ├── layout/             # 主布局（侧边栏 + 顶栏）
 │   │   ├── views/              # 页面（10 个）
-│   │   └── utils/              # Axios 封装
+│   │   ├── stores/             # Pinia 状态（user）
+│   │   ├── api/                # API 封装
+│   │   └── utils/              # Axios 封装、SSE 客户端
+│   ├── vitest.config.ts        # 前端测试配置
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── .env.development
 ├── docs/
 │   ├── sql/init.sql            # 数据库初始化脚本（10 张表）
+│   ├── sql/migrations/         # 增量迁移脚本
+│   ├── badges/                 # 覆盖率徽章
 │   ├── examples/               # 示例需求文档、示例测试点、示例测试用例 Excel
 │   └── system-test-report.md  # 系统测试报告
+├── .github/workflows/ci.yml    # CI：后端 pytest + 前端 vitest/build
 ├── docker-compose.yml          # 一键编排：MySQL + 后端 + 前端
 ├── .env.example
 └── README.md
@@ -232,17 +253,21 @@ pnpm build   # 产物输出到 dist/
 | GET | /api/v1/projects/{project_id}/requirements/{id} | 需求文档详情（含文本内容） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/requirements/{id} | 删除需求文档 | 创建人/管理员 |
 | POST | /api/v1/projects/{project_id}/requirements/{id}/parse | 调用 Requirement Agent 解析需求 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/{id}/parse/stream | 解析需求（SSE 阶段进度流） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/requirements/{id}/parse-result | 获取 AI 解析结果 | 创建人/管理员 |
 | POST | /api/v1/projects/{project_id}/requirements/{id}/test-points/generate | 调用 TestPoint Agent 生成测试点 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/{id}/test-points/generate/stream | 生成测试点（SSE 阶段进度流） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/test-points | 测试点列表（筛选 + 分页） | 创建人/管理员 |
 | PATCH | /api/v1/projects/{project_id}/test-points/{id} | 编辑测试点（人工） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/test-points/{id} | 删除测试点 | 创建人/管理员 |
 | POST | /api/v1/projects/{project_id}/requirements/{id}/test-cases/generate | 调用 TestCase Agent 生成测试用例 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/requirements/{id}/test-cases/generate/stream | 生成测试用例（SSE 阶段进度流） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/test-cases | 测试用例列表（筛选 + 分页） | 创建人/管理员 |
 | PATCH | /api/v1/projects/{project_id}/test-cases/{id} | 编辑测试用例（人工） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/test-cases/{id} | 删除测试用例 | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/test-cases/export | 批量导出测试用例 Excel | 创建人/管理员 |
 | POST | /api/v1/projects/{project_id}/chat/messages | 发送消息（AI 对话） | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/chat/messages/stream | 发送消息（SSE 流式：打字机效果 + 工具调用事件） | 创建人/管理员 |
 | GET | /api/v1/projects/{project_id}/chat/history | 聊天历史（分页） | 创建人/管理员 |
 | DELETE | /api/v1/projects/{project_id}/chat/history | 清空聊天记录 | 创建人/管理员 |
 | GET | /api/v1/dashboard/stats | 仪表盘统计 | 登录用户 |
@@ -286,6 +311,28 @@ pnpm build   # 产物输出到 dist/
 
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
 
+### 9.1 AI 聊天能力
+
+**SSE 流式输出（打字机效果）**：聊天接口 `/chat/messages/stream` 使用 `text/event-stream` 协议逐块推送回复：
+
+| SSE 事件 | 说明 |
+| --- | --- |
+| `tool` | Agent 工具调用（如 `generate_test_data`，前端渲染工具卡片） |
+| `delta` | 回复文本增量（逐字/逐块，打字机效果） |
+| `result` | 完整回复（已持久化，携带消息 id） |
+| `error` | 调用失败提示 |
+
+前端使用原生 `fetch + ReadableStream` 手写 SSE 解析器（`src/utils/sse.ts`），支持断块重组、JSON 解析与 `AbortController` 中断（切换项目/离开页面自动停止）。
+
+**Agent 工具调用**：聊天 Agent 支持 OpenAI function calling 自主决策调用工具：
+
+| 工具 | 作用 |
+| --- | --- |
+| `generate_test_data` | 按字段名生成 12 类测试数据（正常/空值/边界/超长/注入/XSS/中文/英文/数字…） |
+| `get_project_knowledge` | 拉取项目知识库（需求 + 用例）辅助回答 |
+
+`demo` 模式下用关键词模拟工具调用，无需 API Key 即可体验完整流程；配置真实 OpenAI / DeepSeek Key 后由大模型自主决策。
+
 **系统优化（已完成）**：操作日志中间件自动记录写操作；AI 调用日志记录每个 Agent 的调用（供应商、输入/输出长度、耗时、状态）；系统设置支持模型配置、API Key 与 Prompt 模板在线修改（数据库优先、环境变量兜底）；全局异常处理统一返回友好错误；Dashboard 展示统计数据。
 
 **被测系统管理（SUT，扩展功能）**：每个项目可绑定一个被测系统（系统名称、测试网址、系统类型、浏览器、测试账号、测试密码加密存储、系统描述）；提供测试连接（HTTP 状态码/响应时间/连通性）；Requirement / TestPoint / TestCase / Chat 四个 AI 环节自动注入被测系统信息进行分析。已有数据库升级执行 `docs/sql/migrations/002_add_sut_fields.sql`。
@@ -305,10 +352,51 @@ pnpm build   # 产物输出到 dist/
 - [x] 第十一阶段：Docker 部署与收尾
 - [x] 扩展功能：被测系统管理（SUT）
 - [x] 扩展功能：Test Data Generator（测试数据生成器）
+- [x] P1 质量基建：SSE 流式输出、Agent 工具调用、CI 全绿（65 测试用例）
+- [x] P2 质量基建：后端覆盖率（84% + 徽章）、前端 Vitest、README 装修
 
-## 13. 系统测试
+## 13. 测试
 
-完整的系统测试结果见 [docs/system-test-report.md](docs/system-test-report.md)：覆盖全部功能模块的端到端接口测试、前端构建验证与数据库初始化验证。
+### 13.1 后端测试（pytest + 覆盖率）
+
+```bash
+cd backend
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Linux / macOS
+pip install -r requirements.txt -r requirements-dev.txt
+
+pytest                        # 运行全部用例（含覆盖率统计）
+pytest -q                     # 简洁输出
+pytest tests/test_auth.py -v  # 运行单个文件
+```
+
+- 测试套件：**65 个用例**（认证、项目、需求、测试点、测试用例、SSE 流式、Agent 工具调用等）
+- 覆盖率：`pytest.ini` 内置 `--cov=app`，运行后输出行覆盖率报告并生成 `coverage.xml`
+- 当前覆盖率：**84%**（徽章见仓库顶部，CI 每次运行自动更新）
+
+### 13.2 前端测试（Vitest）
+
+```bash
+cd frontend
+pnpm install
+pnpm test          # 运行全部用例
+pnpm test:watch    # 监听模式
+pnpm test:coverage # 覆盖率报告
+```
+
+- 覆盖 `src/utils/sse.ts`（SSE 解析：事件格式、粘包重组、JSON/文本、非流式兜底、错误、Abort 中断）
+- 覆盖 `src/stores/user.ts`（登录/注册/会话持久化/退出，mock API）
+
+### 13.3 持续集成（GitHub Actions）
+
+`.github/workflows/ci.yml` 在 push / PR 时自动执行：
+
+| Job | 内容 |
+| --- | --- |
+| Backend | `compileall` 语法检查 → `pytest`（含覆盖率，上传 `coverage.xml` 产物） |
+| Frontend | `pnpm install` → `vitest` → `vue-tsc + vite build` |
+
+完整的系统测试报告见 [docs/system-test-report.md](docs/system-test-report.md)。
 
 ## 12. 环境要求
 

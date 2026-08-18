@@ -6,6 +6,8 @@ dist/
 __pycache__/
 *.py[cod]
 .venv/
+.coverage
+.coverage.*
 
 # 环境变量（本地敏感配置；.env.example 保留提交）
 .env
@@ -15,6 +17,16 @@ __pycache__/
 # 日志与临时文件
 *.log
 .DS_Store
+coverage.xml
+coverage/
+
+# 前端测试报告
+frontend/coverage/
+
+# 前端本地缓存（npm/pnpm/vue-tsc 构建缓存）
+frontend/.npm-cache/
+frontend/.pnpm-store/
+frontend/.tsbuildinfo/
 
 # 编辑器
 .idea/
@@ -23,3 +35,6 @@ __pycache__/
 
 # 上传文件目录（后续阶段使用）
 backend/uploads/
+
+# WorkBuddy 工具数据（本地会话记录）
+.workbuddy/
