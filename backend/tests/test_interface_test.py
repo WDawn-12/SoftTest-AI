@@ -321,6 +321,9 @@ def test_export_interface_cases_jmeter(client, user_headers):
     # 树结构：Sampler 后跟 <hashTree>、断言后跟 <hashTree/>（JMeter 强制约定）
     assert '</HTTPSamplerProxy><hashTree>' in text
     assert '</ResponseAssertion><hashTree/>' in text
+    # 参数容器：HTTPArgument 必须包裹在 HTTPsampler.Arguments（JMeter 官方格式）
+    assert 'name="HTTPsampler.Arguments"' in text
+    assert 'elementType="HTTPArgument"' in text
     # POST 用例含 JSON body、断言含状态码
     assert "HTTPSampler.postBodyRaw" in text
     assert 'testclass="ResponseAssertion"' in text

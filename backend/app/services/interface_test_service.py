@@ -388,6 +388,7 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
         payload = (case.request_payload or "").strip()
 
         # query 参数（?a=1&b=2 或 key=value 格式，POST JSON body 除外）
+        # JMeter 官方格式：HTTPArgument 需包裹在 HTTPsampler.Arguments 容器内
         arguments = ""
         if payload and not payload.startswith("{"):
             params = []
@@ -402,32 +403,42 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
                     key, value = pair, ""
                 params.append((key, value))
             arg_items = "".join(
-                '<elementProp name="{k}" elementType="Argument">'
-                '<stringProp name="Argument.name">{k}</stringProp>'
+                '<elementProp name="{k}" elementType="HTTPArgument">'
+                '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
                 '<stringProp name="Argument.value">{v}</stringProp>'
                 '<stringProp name="Argument.metadata">=</stringProp>'
+                '<boolProp name="HTTPArgument.use_equals">true</boolProp>'
+                '<stringProp name="Argument.name">{k}</stringProp>'
                 "</elementProp>".format(k=xml_escape(k), v=xml_escape(v))
                 for k, v in params
             )
             if arg_items:
                 arguments = (
-                    '<collectionProp name="HTTPSampler.arguments">'
+                    '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
+                    'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
+                    'testname="参数" enabled="true">'
+                    '<collectionProp name="Arguments.arguments">'
                     f"{arg_items}"
                     "</collectionProp>"
+                    "</elementProp>"
                 )
 
-        # POST/PUT JSON body
+        # POST/PUT JSON body（JMeter raw body 也是 HTTPArgument 容器）
         body_raw = ""
         if method in ("POST", "PUT", "PATCH") and payload.startswith("{"):
             body_raw = (
                 '<boolProp name="HTTPSampler.postBodyRaw">true</boolProp>'
-                '<collectionProp name="HTTPSampler.arguments">'
+                '<elementProp name="HTTPsampler.Arguments" elementType="Arguments" '
+                'guiclass="HTTPArgumentsPanel" testclass="Arguments" '
+                'testname="请求体" enabled="true">'
+                '<collectionProp name="Arguments.arguments">'
                 '<elementProp name="" elementType="HTTPArgument">'
                 '<boolProp name="HTTPArgument.always_encode">false</boolProp>'
                 '<stringProp name="Argument.value">{body}</stringProp>'
                 '<stringProp name="Argument.metadata">=</stringProp>'
                 "</elementProp>"
                 "</collectionProp>"
+                "</elementProp>"
             ).format(body=xml_escape(payload))
 
         # 预期状态码断言
