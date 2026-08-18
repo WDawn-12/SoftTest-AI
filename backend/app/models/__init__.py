@@ -1,6 +1,8 @@
 """模型包：统一导出全部 ORM 模型。"""
 from app.models.chat_history import ChatHistory
 from app.models.ai_call_log import AiCallLog
+from app.models.interface import Interface
+from app.models.interface_test_case import InterfaceTestCase
 from app.models.module import Module
 from app.models.operation_log import OperationLog
 from app.models.project import Project
@@ -21,4 +23,6 @@ __all__ = [
     "OperationLog",
     "SystemSetting",
     "AiCallLog",
+    "Interface",
+    "InterfaceTestCase",
 ]

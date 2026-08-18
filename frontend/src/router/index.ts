@@ -64,6 +64,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '测试用例管理' },
       },
       {
+        path: 'interfaces',
+        name: 'InterfaceList',
+        component: () => import('@/views/interface/InterfaceListView.vue'),
+        meta: { title: '接口管理' },
+      },
+      {
+        path: 'interface-cases',
+        name: 'InterfaceCase',
+        component: () => import('@/views/interface/InterfaceCaseView.vue'),
+        meta: { title: '接口测试用例' },
+      },
+      {
         path: 'chat',
         name: 'Chat',
         component: () => import('@/views/chat/ChatView.vue'),

@@ -70,6 +70,8 @@ graph LR
 | 测试数据生成器 | 字段类型自动识别 + 12 类测试数据（正常/空值/边界/超长/注入/XSS/中文/英文/数字等） | ✅ 已完成 |
 | 测试点管理 | TestPoint Agent 生成五类测试点 + 人工编辑 | ✅ 已完成 |
 | 测试用例管理 | TestCase Agent 生成用例（步骤/数据/预期/优先级/编号）+ 编辑删除 | ✅ 已完成 |
+| 接口管理 | 手动录入 / OpenAPI（Swagger）JSON 导入接口，接口 CRUD | ✅ 已完成 |
+| 接口测试用例 | InterfaceTestCase Agent 生成五类接口用例（正常/异常/边界/安全/参数组合）+ 编辑删除 + Excel 导出 | ✅ 已完成 |
 | AI 聊天助手 | 基于需求/用例的知识问答，Markdown 回复，上下文记忆 | ✅ 已完成 |
 | 系统设置 | 模型配置、API Key、Prompt 模板、操作/AI 日志（管理员） | ✅ 已完成 |
 
@@ -87,7 +89,7 @@ AITestAgent/
 │   │   ├── services/           # 业务逻辑层（含 SSE、聊天、测试数据生成）
 │   │   ├── agents/             # AI Agent 层（Requirement/TestPoint/TestCase/Chat）
 │   │   └── api/v1/             # API v1 路由
-│   ├── tests/                  # pytest 测试套件（65 用例）
+│   ├── tests/                  # pytest 测试套件（78 用例）
 │   ├── pytest.ini              # 测试配置（含覆盖率）
 │   ├── requirements.txt
 │   ├── .env.example
@@ -277,6 +279,16 @@ pnpm build   # 产物输出到 dist/
 | DELETE | /api/v1/projects/{id}/system | 删除被测系统 | 创建人/管理员 |
 | POST | /api/v1/projects/{id}/system/test-connection | 测试连接（检测目标网址） | 创建人/管理员 |
 | POST | /api/v1/generator/test-data | 生成测试数据（自动识别字段类型） | 登录用户 |
+| GET | /api/v1/projects/{project_id}/interfaces | 接口列表（分页 + 搜索） | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/interfaces | 新增接口 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/interfaces/import-openapi | 从 OpenAPI（Swagger）JSON 导入接口 | 创建人/管理员 |
+| PATCH | /api/v1/projects/{project_id}/interfaces/{interface_id} | 编辑接口 | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/interfaces/{interface_id} | 删除接口 | 创建人/管理员 |
+| POST | /api/v1/projects/{project_id}/interfaces/generate-cases | 生成接口测试用例（AI，可指定接口） | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/interface-cases | 接口测试用例列表（筛选 + 分页） | 创建人/管理员 |
+| PATCH | /api/v1/projects/{project_id}/interface-cases/{case_id} | 编辑接口用例 | 创建人/管理员 |
+| DELETE | /api/v1/projects/{project_id}/interface-cases/{case_id} | 删除接口用例 | 创建人/管理员 |
+| GET | /api/v1/projects/{project_id}/interface-cases/export | 导出接口测试用例 Excel | 创建人/管理员 |
 | GET | /api/v1/system/settings | 系统设置（模型/Key/Prompt） | 管理员 |
 | PUT | /api/v1/system/settings | 更新系统设置 | 管理员 |
 | GET | /api/v1/system/logs/operations | 操作日志（分页） | 管理员 |
@@ -310,6 +322,8 @@ pnpm build   # 产物输出到 dist/
 **Test Data Generator（扩展功能）**：独立服务（`app/services/test_data_generator.py`），数据模板外置于 `app/data/test_data_templates.json`（新增字段类型只需改模板，不改业务代码）；按字段名称自动识别类型（用户名/密码/邮箱/手机号/金额/数量/日期/URL/身份证/姓名/图片/文件/字符串），每类字段生成符合软件测试规范的 **12 类测试数据**（正常、空值、边界值、超长、特殊字符、非法、重复、SQL 注入、XSS、中文、英文、数字）。**项目绑定被测系统后，生成用例时自动注入测试账号密码**（正常登录：`账号 demo / 密码 <测试环境密码>`；密码错误：`密码 <错误密码>`；用户名为空：`账号 ""` 等完整场景，实际值在系统设置中配置），TestCase Agent 生成用例前先读取测试点并调用生成器匹配测试数据（Prompt 不写死任何数据），保证每条用例的测试数据真实、合理、完整且非空，Excel「测试数据」列同步导出。
 
 **AI 聊天助手（已完成）**：按「项目 + 用户」维度保存聊天记录，自动注入最近对话上下文与项目知识库（需求解析结果 + 测试用例）回答问题，支持 Markdown 回复；切换 OpenAI / DeepSeek 方式与上述 Agent 一致。
+
+**InterfaceTestCase Agent（扩展功能）**：根据接口定义（手动录入或 OpenAPI/Swagger 导入）生成接口测试用例，每个接口覆盖 5 类场景（正常流程、异常流程、边界值、安全测试、参数组合），含请求方法/路径/请求体/预期状态码/优先级；编号按项目顺序自动生成（API0001……），支持编辑删除与 Excel 导出；真实模型按接口分批生成避免长输出截断，demo 模式关键词模拟。
 
 ### 9.1 AI 聊天能力
 
@@ -353,7 +367,8 @@ pnpm build   # 产物输出到 dist/
 - [x] 扩展功能：被测系统管理（SUT）
 - [x] 扩展功能：Test Data Generator（测试数据生成器）
 - [x] P1 质量基建：SSE 流式输出、Agent 工具调用、CI 全绿（65 测试用例）
-- [x] P2 质量基建：后端覆盖率（84% + 徽章）、前端 Vitest、README 装修
+- [x] P2 质量基建：后端覆盖率（86% + 徽章）、前端 Vitest、README 装修
+- [x] P3 扩展功能：接口测试模块（接口管理 + OpenAPI 导入 + InterfaceTestCase Agent）
 
 ## 13. 测试
 
@@ -370,9 +385,9 @@ pytest -q                     # 简洁输出
 pytest tests/test_auth.py -v  # 运行单个文件
 ```
 
-- 测试套件：**65 个用例**（认证、项目、需求、测试点、测试用例、SSE 流式、Agent 工具调用等）
+- 测试套件：**78 个用例**（认证、项目、需求、测试点、测试用例、SSE 流式、Agent 工具调用、接口测试等）
 - 覆盖率：`pytest.ini` 内置 `--cov=app`，运行后输出行覆盖率报告并生成 `coverage.xml`
-- 当前覆盖率：**84%**（徽章见仓库顶部，CI 每次运行自动更新）
+- 当前覆盖率：**86%**（徽章见仓库顶部，CI 每次运行自动更新）
 
 ### 13.2 前端测试（Vitest）
 

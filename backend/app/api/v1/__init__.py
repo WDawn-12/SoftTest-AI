@@ -7,6 +7,7 @@ from app.api.v1 import (
     dashboard,
     generator,
     health,
+    interface_test,
     projects,
     requirements,
     systems,
@@ -30,3 +31,4 @@ api_router.include_router(systems.router)
 api_router.include_router(system.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(generator.router)
+api_router.include_router(interface_test.router)

@@ -55,6 +55,7 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowDown,
   ChatDotRound,
+  Connection,
   Document,
   Expand,
   Fold,
@@ -81,6 +82,8 @@ const menuItems = [
   { path: '/projects/new', title: '新建项目', icon: FolderAdd },
   { path: '/test-points', title: '测试点管理', icon: Tickets },
   { path: '/test-cases', title: '测试用例管理', icon: Document },
+  { path: '/interfaces', title: '接口管理', icon: Connection },
+  { path: '/interface-cases', title: '接口测试用例', icon: Tickets },
   { path: '/chat', title: 'AI 聊天助手', icon: ChatDotRound },
   { path: '/settings', title: '系统设置', icon: Setting },
 ]

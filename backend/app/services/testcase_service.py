@@ -31,6 +31,9 @@ PRIORITY_MAP = {
     "p3": "低",
 }
 
+# 单次生成的测试点上限：避免模型输出过长导致 JSON 末尾截断/漏逗号
+TESTCASE_BATCH_SIZE = 15
+
 
 def run_testcase_generation(
     db: Session, requirement: Requirement, user_id: int
@@ -68,19 +71,32 @@ def run_testcase_generation(
 
     prompt_length = len(json.dumps(points_data, ensure_ascii=False))
     start = time.monotonic()
+    # 分批生成：每批 TESTCASE_BATCH_SIZE 个测试点，避免单次输出过长被截断
+    batches = [
+        points_data[i : i + TESTCASE_BATCH_SIZE]
+        for i in range(0, len(points_data), TESTCASE_BATCH_SIZE)
+    ]
+    provider_name = None
+    total_response_length = 0
     try:
-        agent = TestCaseAgent(get_llm_provider(db))
+        provider = get_llm_provider(db)
+        agent = TestCaseAgent(provider)
         system_prompt = get_setting(db, "prompt_testcase")
-        result = agent.generate(points_data, system_prompt, project_context)
-        cases = result.get("test_cases", [])
+        provider_name = agent.provider_name
+        cases: list[dict] = []
+        for batch_index, batch in enumerate(batches):
+            batch_result = agent.generate(batch, system_prompt, project_context)
+            batch_cases = batch_result.get("test_cases", [])
+            cases.extend(batch_cases)
+            total_response_length += len(json.dumps(batch_cases, ensure_ascii=False))
         duration_ms = int((time.monotonic() - start) * 1000)
         log_ai_call(
             db,
             user_id=user_id,
             agent="TestCase",
-            provider=agent.provider_name,
+            provider=provider_name,
             prompt_length=prompt_length,
-            response_length=len(json.dumps(cases, ensure_ascii=False)),
+            response_length=total_response_length,
             duration_ms=duration_ms,
         )
     except Exception as exc:  # 模型调用/密钥配置/输出解析失败
@@ -89,9 +105,9 @@ def run_testcase_generation(
             db,
             user_id=user_id,
             agent="TestCase",
-            provider=None,
+            provider=provider_name,
             prompt_length=prompt_length,
-            response_length=0,
+            response_length=total_response_length,
             duration_ms=duration_ms,
             status="failed",
             error_message=str(exc)[:500],

@@ -5,6 +5,7 @@ from app.agents.chat_agent import SYSTEM_PROMPT as CHAT_SYSTEM_PROMPT
 from app.agents.requirement_agent import SYSTEM_PROMPT as REQUIREMENT_SYSTEM_PROMPT
 from app.agents.testcase_agent import SYSTEM_PROMPT as TESTCASE_SYSTEM_PROMPT
 from app.agents.testpoint_agent import SYSTEM_PROMPT as TESTPOINT_SYSTEM_PROMPT
+from app.agents.interface_testcase_agent import SYSTEM_PROMPT as INTERFACE_TESTCASE_SYSTEM_PROMPT
 from app.core.config import settings
 from app.models.system_setting import SystemSetting
 
@@ -20,6 +21,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "prompt_requirement": REQUIREMENT_SYSTEM_PROMPT,
     "prompt_testpoint": TESTPOINT_SYSTEM_PROMPT,
     "prompt_testcase": TESTCASE_SYSTEM_PROMPT,
+    "prompt_interface_testcase": INTERFACE_TESTCASE_SYSTEM_PROMPT,
     "prompt_chat": CHAT_SYSTEM_PROMPT,
 }
 

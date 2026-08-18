@@ -153,7 +153,7 @@ class DemoProvider(LLMProvider):
     name = "demo"
 
     def chat(self, system_prompt: str, user_prompt: str) -> str:
-        # 演示供应商：按任务类型返回对应示例（测试点 / 测试用例 / 需求解析）
+        # 演示供应商：按任务类型返回对应示例（测试点 / 测试用例 / 接口用例 / 需求解析）
         functions = self._extract_functions(user_prompt)
         if functions is not None:
             return json.dumps(
@@ -164,6 +164,12 @@ class DemoProvider(LLMProvider):
         if test_points is not None:
             return json.dumps(
                 {"test_cases": self._generate_testcases(test_points)},
+                ensure_ascii=False,
+            )
+        interfaces = self._extract_interfaces(user_prompt)
+        if interfaces is not None:
+            return json.dumps(
+                {"test_cases": self._generate_interface_cases(interfaces)},
                 ensure_ascii=False,
             )
         if "对话内容：" in user_prompt:
@@ -255,6 +261,81 @@ class DemoProvider(LLMProvider):
         ):
             return data
         return None
+
+    def _extract_interfaces(self, user_prompt: str) -> list[dict] | None:
+        """从用户提示中提取接口定义 JSON（InterfaceTestCase Agent 专用）。"""
+        fence = re.search(r"```json\s*(.*?)```", user_prompt, re.S)
+        if not fence:
+            return None
+        try:
+            data = json.loads(fence.group(1))
+        except json.JSONDecodeError:
+            return None
+        if (
+            isinstance(data, list)
+            and data
+            and "path" in data[0]
+            and "method" in data[0]
+        ):
+            return data
+        return None
+
+    def _generate_interface_cases(self, interfaces: list[dict]) -> list[dict]:
+        """按五类规则生成演示接口测试用例。"""
+        cases: list[dict] = []
+        no = 0
+        for api in interfaces:
+            iface_id = api.get("id")
+            method = str(api.get("method", "GET")).upper()
+            path = str(api.get("path", "/"))
+            name = str(api.get("name") or path)
+            summary = str(api.get("summary") or "") or name
+            # 解析路径中的 {占位符}，生成实际取值（demo 用 1 占位）
+            placeholders = re.findall(r"\{(\w+)\}", path)
+            path_with_value = path
+            for ph in placeholders:
+                path_with_value = path_with_value.replace(f"{{{ph}}}", "1")
+            categories = [
+                ("normal", "验证「{0}」接口正常调用返回预期结果", "200", "高", "请求合法，接口返回预期数据"),
+                ("exception", "验证「{0}」接口缺失必填参数时返回错误", "400/422", "中", "接口返回明确错误信息，不抛 500"),
+                ("boundary", "验证「{0}」接口参数边界值（空值/超长/极值）的处理", "400/200", "中", "边界值处理正确，无越界或异常"),
+                ("security", "验证「{0}」接口鉴权缺失与注入攻击防护", "401/403/400", "高", "未授权请求被拒绝，注入被拦截"),
+                ("parameter", "验证「{0}」接口参数组合与格式兼容性", "200/400", "中", "合法组合成功，非法组合给出提示"),
+            ]
+            for category, template, status, priority, expected in categories:
+                no += 1
+                title = template.format(name)
+                cases.append(
+                    {
+                        "interface_id": iface_id,
+                        "title": title,
+                        "category": category,
+                        "method": method,
+                        "path": path_with_value or path,
+                        "test_data": "username=test_user, page=1, page_size=10",
+                        "request_payload": self._demo_payload(method),
+                        "expected_status": status,
+                        "expected_result": expected,
+                        "priority": priority,
+                        "preconditions": "接口服务运行正常，网络连通",
+                        "steps": [
+                            f"构造 {method} 请求 {path}",
+                            f"按 {category} 场景设置参数并发送请求",
+                            "检查响应状态码与返回体是否符合预期",
+                        ],
+                        "remark": f"由 InterfaceTestCase Agent 生成（{category} 场景）",
+                    }
+                )
+        return cases
+
+    @staticmethod
+    def _demo_payload(method: str) -> str:
+        """demo 模式的示例请求体。"""
+        if method in ("GET", "DELETE"):
+            return "?username=test_user&page=1&page_size=10"
+        return json.dumps(
+            {"username": "test_user", "password": "123456"}, ensure_ascii=False
+        )
 
     def _generate_testpoints(self, functions: list[dict]) -> list[dict]:
         """按五类测试规则生成演示测试点。"""
