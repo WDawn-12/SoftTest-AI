@@ -449,21 +449,29 @@ def build_jmeter_test_plan(db: Session, project_id: int) -> bytes:
                 "</elementProp>"
             ).format(body=xml_escape(payload))
 
-        # 预期状态码断言
+        # 预期状态码断言（支持多值，如 "400/422" → 拆成多个 pattern，OR 语义）
         expected_status = (case.expected_status or "200").strip()
+        status_list = [
+            s.strip() for s in expected_status.replace("，", "/").split("/") if s.strip()
+        ]
+        if not status_list:
+            status_list = ["200"]
+        status_items = "".join(
+            f'<stringProp name="49586">{xml_escape(s)}</stringProp>' for s in status_list
+        )
         assertion = _jmx_element(
             "ResponseAssertion",
             "AssertionGui",
             f"状态码断言 {expected_status}",
             (
                 '<collectionProp name="Asserion.test_strings">'
-                '<stringProp name="49586">{status}</stringProp>'
+                f"{status_items}"
                 "</collectionProp>"
                 '<stringProp name="Assertion.custom_message"></stringProp>'
                 '<stringProp name="Assertion.test_field">Assertion.response_code</stringProp>'
                 '<boolProp name="Assertion.assume_success">false</boolProp>'
                 '<intProp name="Assertion.test_type">8</intProp>'
-            ).format(status=xml_escape(expected_status)),
+            ),
         )
 
         sampler_name = f"{case.case_no} {case.title}"
