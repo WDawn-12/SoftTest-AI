@@ -5,6 +5,7 @@ export type TestPointCategory =
   | 'boundary'
   | 'security'
   | 'compatibility'
+  | 'performance'
 
 export interface TestPoint {
   id: number

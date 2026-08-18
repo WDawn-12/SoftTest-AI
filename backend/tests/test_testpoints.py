@@ -1,4 +1,4 @@
-"""测试点接口测试：demo 模式生成五类测试点、筛选、编辑、删除。"""
+"""测试点接口测试：demo 模式生成六类测试点、筛选、编辑、删除。"""
 from conftest import get_headers, register_user
 
 REQ_TEXT = """# 图书管理系统
@@ -29,14 +29,21 @@ def generate_points(client, headers, project_id, rid):
     )
 
 
-def test_generate_five_categories(client, project_id, user_headers):
+def test_generate_six_categories(client, project_id, user_headers):
     rid = prepare_parsed(client, user_headers, project_id)
     resp = generate_points(client, user_headers, project_id, rid)
     assert resp.status_code == 200
     points = resp.json()
-    assert len(points) >= 5
+    assert len(points) >= 6
     categories = {p["category"] for p in points}
-    assert {"normal", "exception", "boundary", "security", "compatibility"} <= categories
+    assert {
+        "normal",
+        "exception",
+        "boundary",
+        "security",
+        "compatibility",
+        "performance",
+    } <= categories
     assert all(p["name"] for p in points)
 
 

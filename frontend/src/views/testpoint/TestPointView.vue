@@ -207,6 +207,7 @@ const categoryMeta: Record<
   boundary: { label: '边界值', type: 'warning' },
   security: { label: '安全测试', type: 'info' },
   compatibility: { label: '兼容性', type: 'primary' },
+  performance: { label: '性能测试', type: 'warning' },
 }
 
 async function loadProjects() {

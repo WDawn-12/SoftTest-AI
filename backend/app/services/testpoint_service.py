@@ -36,13 +36,16 @@ CATEGORY_MAP = {
     "兼容": "compatibility",
     "兼容性": "compatibility",
     "兼容性测试": "compatibility",
+    "performance": "performance",
+    "性能": "performance",
+    "性能测试": "performance",
 }
 
 
 def run_testpoint_generation(
     db: Session, requirement: Requirement, user_id: int
 ) -> list[TestPoint]:
-    """调用 TestPoint Agent 生成五类测试点并保存（重新生成时先清旧数据）。"""
+    """调用 TestPoint Agent 生成六类测试点并保存（重新生成时先清旧数据）。"""
     modules = (
         db.query(Module)
         .filter(Module.requirement_id == requirement.id)

@@ -338,7 +338,7 @@ class DemoProvider(LLMProvider):
         )
 
     def _generate_testpoints(self, functions: list[dict]) -> list[dict]:
-        """按五类测试规则生成演示测试点。"""
+        """按六类测试规则生成演示测试点。"""
         points: list[dict] = []
         for module in functions:
             module_name = module.get("module", "核心模块")
@@ -369,6 +369,11 @@ class DemoProvider(LLMProvider):
                             "category": "compatibility",
                             "module": module_name,
                             "name": f"验证「{fn}」在主流浏览器/分辨率下兼容运行",
+                        },
+                        {
+                            "category": "performance",
+                            "module": module_name,
+                            "name": f"验证「{fn}」的响应时间、并发处理与资源占用",
                         },
                     ]
                 )

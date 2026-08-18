@@ -4,7 +4,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TestPointCategory = Literal["normal", "exception", "boundary", "security", "compatibility"]
+TestPointCategory = Literal[
+    "normal",
+    "exception",
+    "boundary",
+    "security",
+    "compatibility",
+    "performance",
+]
 
 
 class TestPointOut(BaseModel):
